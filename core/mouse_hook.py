@@ -876,6 +876,7 @@ elif sys.platform == "darwin":
 # ==================================================================
 
 elif sys.platform.startswith("linux"):
+    import os
     import select
     import subprocess
     
