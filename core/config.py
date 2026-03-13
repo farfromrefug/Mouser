@@ -7,9 +7,15 @@ import json
 import os
 import sys
 
-CONFIG_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "Mouser")
 if sys.platform == "darwin":
-    CONFIG_DIR = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "Mouser")
+    _appdata = os.path.expanduser("~/Library/Application Support")
+elif sys.platform.startswith("linux"):
+    # Follow XDG Base Directory specification
+    _appdata = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+else:
+    _appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
+
+CONFIG_DIR = os.path.join(_appdata, "Mouser")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 # Which mouse events map to which friendly button names

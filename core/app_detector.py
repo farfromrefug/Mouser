@@ -118,6 +118,106 @@ elif sys.platform == "darwin":
         except Exception:
             return None
 
+elif sys.platform.startswith("linux"):
+    def get_foreground_exe() -> str | None:
+        """Return the executable name of the focused window on Linux."""
+        try:
+            # First try X11 approach
+            display = os.environ.get("DISPLAY")
+            if display:
+                try:
+                    from Xlib import X, display as xdisplay
+                    d = xdisplay.Display()
+                    # Get the currently focused window
+                    focus = d.get_input_focus().focus
+                    if focus and hasattr(focus, 'get_wm_class'):
+                        wm_class = focus.get_wm_class()
+                        if wm_class:
+                            # wm_class returns (instance, class)
+                            # Return the instance name (usually the application name)
+                            return wm_class[0] if wm_class[0] else wm_class[1]
+                    
+                    # Try to get the _NET_ACTIVE_WINDOW property
+                    root = d.screen().root
+                    net_active_window = d.intern_atom('_NET_ACTIVE_WINDOW')
+                    active_window_id = root.get_full_property(net_active_window, X.AnyPropertyType)
+                    
+                    if active_window_id and active_window_id.value:
+                        window_id = active_window_id.value[0]
+                        active_window = d.create_resource_object('window', window_id)
+                        
+                        # Try _NET_WM_PID first
+                        net_wm_pid = d.intern_atom('_NET_WM_PID')
+                        pid_prop = active_window.get_full_property(net_wm_pid, X.AnyPropertyType)
+                        
+                        if pid_prop and pid_prop.value:
+                            pid = pid_prop.value[0]
+                            # Read process name from /proc
+                            try:
+                                with open(f"/proc/{pid}/comm", 'r') as f:
+                                    return f.read().strip()
+                            except (IOError, FileNotFoundError):
+                                pass
+                        
+                        # Fallback to WM_CLASS
+                        wm_class = active_window.get_wm_class()
+                        if wm_class:
+                            return wm_class[0] if wm_class[0] else wm_class[1]
+                        
+                except Exception:
+                    pass
+            
+            # Wayland fallback - try to get info from /proc
+            # This is less reliable but might work in some cases
+            wayland_display = os.environ.get("WAYLAND_DISPLAY")
+            if wayland_display:
+                # On Wayland, we can't easily get the focused window
+                # Try using D-Bus to query window managers that support it
+                try:
+                    import subprocess
+                    # Try GNOME Shell's D-Bus interface (GNOME on Wayland)
+                    result = subprocess.run([
+                        'gdbus', 'call', '--session',
+                        '--dest', 'org.gnome.Shell',
+                        '--object-path', '/org/gnome/Shell',
+                        '--method', 'org.gnome.Shell.Eval',
+                        'global.display.focus_window.get_wm_class()'
+                    ], capture_output=True, text=True, timeout=0.5)
+                    
+                    if result.returncode == 0:
+                        # Parse the result - it's in format: (true, '"AppName"')
+                        output = result.stdout.strip()
+                        if '"' in output:
+                            # Extract the app name between quotes
+                            start = output.find('"') + 1
+                            end = output.rfind('"')
+                            if start > 0 and end > start:
+                                return output[start:end]
+                except Exception:
+                    pass
+                
+                # Another fallback: try KDE/KWin D-Bus interface
+                try:
+                    import subprocess
+                    result = subprocess.run([
+                        'qdbus', 'org.kde.KWin', '/KWin',
+                        'org.kde.KWin.queryWindowInfo'
+                    ], capture_output=True, text=True, timeout=0.5)
+                    
+                    if result.returncode == 0:
+                        # Parse KWin output for application name
+                        for line in result.stdout.split('\n'):
+                            if 'resourceClass' in line or 'resourceName' in line:
+                                parts = line.split(':')
+                                if len(parts) > 1:
+                                    return parts[1].strip()
+                except Exception:
+                    pass
+                    
+        except Exception:
+            pass
+        return None
+
 else:
     def get_foreground_exe() -> str | None:
         return None

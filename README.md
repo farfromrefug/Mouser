@@ -13,7 +13,10 @@ No telemetry. No cloud. No Logitech account required.
 
 ## Features
 
-- **macOS support** — **full macOS compatibility added thanks to [andrew-sz](https://github.com/andrew-sz)**, using CGEventTap for mouse hooking, Quartz CGEvent for key simulation, and NSWorkspace for app detection. See [macOS Setup Guide](readme_mac_osx.md) for details.
+- **Cross-platform support** — **Windows, macOS, and Linux** all supported
+  - Windows: Full native support using Win32 hooks
+  - macOS: Full support via CGEventTap, Quartz CGEvent, and NSWorkspace. See [macOS Setup Guide](readme_mac_osx.md) for details.
+  - Linux: X11 and Wayland support via python-xlib and pynput backends. See [Linux Setup Guide](readme_linux.md) for details.
 - **Remap all 6 programmable buttons** — middle click, gesture button, back, forward, horizontal scroll left/right
 - **Per-application profiles** — automatically switch button mappings when you switch apps (e.g., different bindings for Chrome vs. VS Code)
 - **22 built-in actions** across navigation, browser, editing, and media categories
@@ -107,11 +110,15 @@ That's it — the app will open and start remapping your mouse buttons immediate
 
 ### Prerequisites
 
-- **Windows 10/11** or **macOS 12+ (Monterey)**
+- **Windows 10/11**, **macOS 12+ (Monterey)**, or **Linux** (Ubuntu 20.04+, Fedora 35+, or equivalent)
 - **Python 3.10+** (tested with 3.14)
 - **Logitech MX Master 3S** paired via Bluetooth or USB receiver
 - **Logitech Options+ must NOT be running** (it conflicts with HID++ access)
 - **macOS only:** Accessibility permission required (System Settings → Privacy & Security → Accessibility)
+- **Linux only:** 
+  - X11 or Wayland display server
+  - Optional: Add user to `input` group for enhanced device access: `sudo usermod -a -G input $USER`
+  - May require logout/login after adding to group
 
 ### Steps
 
@@ -313,12 +320,16 @@ The app has two pages accessible from a slim sidebar:
 
 ## Known Limitations
 
-- **Windows & macOS only** — Linux is not yet supported
 - **MX Master 3S only** — HID++ feature indices and CIDs are hardcoded for this device (PID `0xB034`)
 - **Bluetooth recommended** — HID++ gesture button divert works best over Bluetooth; USB receiver has partial support
 - **Conflicts with Logitech Options+** — both apps fight over HID++ access; quit Options+ before running Mouser
 - **Scroll inversion is experimental** — uses coalesced `PostMessage` injection to avoid LL hook deadlocks; may not work perfectly in all apps
 - **Admin not required** — but some games or elevated windows may not receive injected keystrokes
+- **Linux limitations:**
+  - Event blocking not fully supported on Wayland (events are intercepted but may still reach applications)
+  - X11 backend requires python-xlib library
+  - pynput fallback works on both X11 and Wayland but has limited blocking capabilities
+  - Some desktop environments may require additional permissions
 
 ## Future Work
 
@@ -331,7 +342,8 @@ The app has two pages accessible from a slim sidebar:
 - [ ] **Export/import config** — share configurations between machines
 - [ ] **Tray icon badge** — show active profile name in tray tooltip
 - [x] **macOS support** — added via CGEventTap, Quartz CGEvent, and NSWorkspace (thanks [@andrew-sz](https://github.com/andrew-sz))
-- [ ] **Linux support** — investigate `libevdev` / `evdev` hooks
+- [x] **Linux support** — added via python-xlib (X11) and pynput (X11/Wayland) backends
+- [ ] **Improved Linux Wayland support** — investigate better event blocking mechanisms
 - [ ] **Plugin system** — allow third-party action providers
 
 ## Contributing
