@@ -612,6 +612,11 @@ elif sys.platform.startswith("linux"):
         """Press and release a single key."""
         send_key_combo([key])
 
+    # Helper function to check if a media key is available
+    def _has_media_key(key_name):
+        """Check if a media key attribute is available and not just a string placeholder."""
+        return hasattr(Key, key_name) and getattr(Key, key_name) != key_name
+
     # Linux key mappings using pynput Key objects
     ACTIONS = {
         "alt_tab": {
@@ -691,32 +696,32 @@ elif sys.platform.startswith("linux"):
         },
         "volume_up": {
             "label": "Volume Up",
-            "keys": [Key.media_volume_up] if hasattr(Key, 'media_volume_up') and Key.media_volume_up != 'media_volume_up' else [],
+            "keys": [Key.media_volume_up] if _has_media_key('media_volume_up') else [],
             "category": "Media",
         },
         "volume_down": {
             "label": "Volume Down",
-            "keys": [Key.media_volume_down] if hasattr(Key, 'media_volume_down') and Key.media_volume_down != 'media_volume_down' else [],
+            "keys": [Key.media_volume_down] if _has_media_key('media_volume_down') else [],
             "category": "Media",
         },
         "volume_mute": {
             "label": "Volume Mute",
-            "keys": [Key.media_volume_mute] if hasattr(Key, 'media_volume_mute') and Key.media_volume_mute != 'media_volume_mute' else [],
+            "keys": [Key.media_volume_mute] if _has_media_key('media_volume_mute') else [],
             "category": "Media",
         },
         "play_pause": {
             "label": "Play / Pause",
-            "keys": [Key.media_play_pause] if hasattr(Key, 'media_play_pause') and Key.media_play_pause != 'media_play_pause' else [],
+            "keys": [Key.media_play_pause] if _has_media_key('media_play_pause') else [],
             "category": "Media",
         },
         "next_track": {
             "label": "Next Track",
-            "keys": [Key.media_next] if hasattr(Key, 'media_next') and Key.media_next != 'media_next' else [],
+            "keys": [Key.media_next] if _has_media_key('media_next') else [],
             "category": "Media",
         },
         "prev_track": {
             "label": "Previous Track",
-            "keys": [Key.media_previous] if hasattr(Key, 'media_previous') and Key.media_previous != 'media_previous' else [],
+            "keys": [Key.media_previous] if _has_media_key('media_previous') else [],
             "category": "Media",
         },
         "none": {

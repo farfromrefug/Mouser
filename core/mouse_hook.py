@@ -1103,8 +1103,8 @@ elif sys.platform.startswith("linux"):
                                     self._debug_callback(f"X11: {mouse_event.event_type} btn={button}")
                                 self._dispatch_queue.put(mouse_event)
                     
-                    # Small sleep to prevent busy waiting
-                    time.sleep(0.001)
+                    # Sleep to prevent busy waiting (10ms = 100 polls per second)
+                    time.sleep(0.01)
                     
             except Exception as e:
                 print(f"[MouseHook] X11 listener error: {e}")

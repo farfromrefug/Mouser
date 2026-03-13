@@ -122,6 +122,8 @@ elif sys.platform.startswith("linux"):
     def get_foreground_exe() -> str | None:
         """Return the executable name of the focused window on Linux."""
         try:
+            import subprocess
+            
             # First try X11 approach
             display = os.environ.get("DISPLAY")
             if display:
@@ -174,7 +176,6 @@ elif sys.platform.startswith("linux"):
                 # On Wayland, we can't easily get the focused window
                 # Try using D-Bus to query window managers that support it
                 try:
-                    import subprocess
                     # Try GNOME Shell's D-Bus interface (GNOME on Wayland)
                     result = subprocess.run([
                         'gdbus', 'call', '--session',
@@ -198,7 +199,6 @@ elif sys.platform.startswith("linux"):
                 
                 # Another fallback: try KDE/KWin D-Bus interface
                 try:
-                    import subprocess
                     result = subprocess.run([
                         'qdbus', 'org.kde.KWin', '/KWin',
                         'org.kde.KWin.queryWindowInfo'
