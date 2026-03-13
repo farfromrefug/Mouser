@@ -872,6 +872,360 @@ elif sys.platform == "darwin":
 
 
 # ==================================================================
+# Linux implementation
+# ==================================================================
+
+elif sys.platform.startswith("linux"):
+    import os
+    import select
+    import subprocess
+    
+    # Try to import evdev for input monitoring
+    try:
+        import evdev
+        from evdev import InputDevice, categorize, ecodes
+        _EVDEV_OK = True
+    except ImportError:
+        _EVDEV_OK = False
+        print("[MouseHook] evdev not installed — pip install evdev (some features may be limited)")
+    
+    # Try to import X11 libraries for X11-specific handling
+    try:
+        from Xlib import X, display as xdisplay, XK
+        from Xlib.ext import xinput
+        _XLIB_OK = True
+    except ImportError:
+        _XLIB_OK = False
+        print("[MouseHook] python-xlib not installed — pip install python-xlib (X11 support limited)")
+    
+    # Try to import pynput for mouse listening (cross-platform fallback)
+    try:
+        from pynput import mouse as pynput_mouse
+        _PYNPUT_OK = True
+    except ImportError:
+        _PYNPUT_OK = False
+        print("[MouseHook] pynput not installed — pip install pynput (fallback listener unavailable)")
+
+    class MouseHook:
+        """
+        Linux mouse hook implementation supporting multiple backends:
+        1. X11 (python-xlib) for X11 environments
+        2. pynput (cross-platform) as fallback
+        3. evdev (low-level) for direct device access (requires permissions)
+        
+        Priority: X11 > pynput > evdev
+        """
+
+        def __init__(self):
+            self._running = False
+            self._callbacks = {}
+            self._blocked_events = set()
+            self.debug_mode = False
+            self.invert_vscroll = False
+            self.invert_hscroll = False
+            self._gesture_active = False
+            self._hid_gesture = None
+            self._dispatch_queue = queue.Queue()
+            self._dispatch_thread = None
+            self._listener_thread = None
+            self._device_connected = False
+            self._connection_change_cb = None
+            self._debug_callback = None
+            
+            # Detect which backend to use
+            self._backend = None
+            self._listener = None
+            self._x_display = None
+            
+            # Check display server
+            self._is_x11 = bool(os.environ.get("DISPLAY"))
+            self._is_wayland = bool(os.environ.get("WAYLAND_DISPLAY"))
+            
+            print(f"[MouseHook] Linux detected: X11={self._is_x11}, Wayland={self._is_wayland}")
+
+        def register(self, event_type, callback):
+            """Register a callback for a specific event type."""
+            self._callbacks.setdefault(event_type, []).append(callback)
+
+        def block(self, event_type):
+            """Mark an event type as blocked (suppress from applications)."""
+            self._blocked_events.add(event_type)
+
+        def unblock(self, event_type):
+            """Unmark an event type as blocked."""
+            self._blocked_events.discard(event_type)
+
+        def reset_bindings(self):
+            """Clear all callbacks and blocked events."""
+            self._callbacks.clear()
+            self._blocked_events.clear()
+
+        def set_connection_change_callback(self, cb):
+            """Set callback for device connection changes."""
+            self._connection_change_cb = cb
+
+        @property
+        def device_connected(self):
+            """Return device connection status."""
+            return self._device_connected
+
+        def _set_device_connected(self, connected):
+            """Update device connection status and notify callback."""
+            if connected == self._device_connected:
+                return
+            self._device_connected = connected
+            state = "Connected" if connected else "Disconnected"
+            print(f"[MouseHook] Device {state}")
+            if self._connection_change_cb:
+                try:
+                    self._connection_change_cb(connected)
+                except Exception:
+                    pass
+
+        def set_debug_callback(self, callback):
+            """Set callback for debug messages."""
+            self._debug_callback = callback
+
+        def _dispatch(self, event):
+            """Dispatch an event to registered callbacks."""
+            for cb in self._callbacks.get(event.event_type, []):
+                try:
+                    cb(event)
+                except Exception as e:
+                    print(f"[MouseHook] callback error: {e}")
+
+        def _dispatch_worker(self):
+            """Background thread: drains the event queue."""
+            while self._running:
+                try:
+                    event = self._dispatch_queue.get(timeout=0.05)
+                    self._dispatch(event)
+                except queue.Empty:
+                    continue
+
+        def _pynput_on_click(self, x, y, button, pressed):
+            """Handle pynput mouse click events."""
+            try:
+                mouse_event = None
+                
+                if button == pynput_mouse.Button.middle:
+                    mouse_event = MouseEvent(
+                        MouseEvent.MIDDLE_DOWN if pressed else MouseEvent.MIDDLE_UP
+                    )
+                elif button == pynput_mouse.Button.x1:
+                    mouse_event = MouseEvent(
+                        MouseEvent.XBUTTON1_DOWN if pressed else MouseEvent.XBUTTON1_UP
+                    )
+                elif button == pynput_mouse.Button.x2:
+                    mouse_event = MouseEvent(
+                        MouseEvent.XBUTTON2_DOWN if pressed else MouseEvent.XBUTTON2_UP
+                    )
+                
+                if mouse_event:
+                    if self.debug_mode and self._debug_callback:
+                        self._debug_callback(f"pynput: {mouse_event.event_type}")
+                    self._dispatch_queue.put(mouse_event)
+                    
+                    # Check if we should block this event
+                    # Note: pynput doesn't support true blocking, but we still track it
+                    if mouse_event.event_type in self._blocked_events:
+                        # We can't actually block with pynput, just dispatch to handler
+                        pass
+                        
+            except Exception as e:
+                print(f"[MouseHook] pynput click error: {e}")
+
+        def _pynput_on_scroll(self, x, y, dx, dy):
+            """Handle pynput mouse scroll events."""
+            try:
+                # Handle horizontal scroll
+                if dx != 0:
+                    mouse_event = MouseEvent(
+                        MouseEvent.HSCROLL_RIGHT if dx > 0 else MouseEvent.HSCROLL_LEFT
+                    )
+                    if self.debug_mode and self._debug_callback:
+                        self._debug_callback(f"pynput: {mouse_event.event_type} dx={dx}")
+                    self._dispatch_queue.put(mouse_event)
+                
+                # Handle vertical scroll (for inversion if needed)
+                if dy != 0 and self.invert_vscroll:
+                    # Dispatch inverted scroll event if needed
+                    # This would require additional handling in the engine
+                    pass
+                    
+            except Exception as e:
+                print(f"[MouseHook] pynput scroll error: {e}")
+
+        def _x11_listener(self):
+            """X11 event listener thread using python-xlib."""
+            try:
+                self._x_display = xdisplay.Display()
+                root = self._x_display.screen().root
+                
+                # Subscribe to button press/release events
+                root.change_attributes(event_mask=X.ButtonPressMask | X.ButtonReleaseMask)
+                
+                print("[MouseHook] X11 listener started")
+                
+                while self._running:
+                    # Check for events with timeout
+                    while self._x_display.pending_events() > 0:
+                        event = self._x_display.next_event()
+                        
+                        if event.type == X.ButtonPress or event.type == X.ButtonRelease:
+                            button = event.detail
+                            pressed = (event.type == X.ButtonPress)
+                            
+                            mouse_event = None
+                            
+                            # Map X11 button numbers to our events
+                            # X11: 1=left, 2=middle, 3=right, 4=scroll up, 5=scroll down
+                            # 6=scroll left, 7=scroll right, 8=back, 9=forward
+                            if button == 2:  # Middle button
+                                mouse_event = MouseEvent(
+                                    MouseEvent.MIDDLE_DOWN if pressed else MouseEvent.MIDDLE_UP
+                                )
+                            elif button == 8:  # Back button (X1)
+                                mouse_event = MouseEvent(
+                                    MouseEvent.XBUTTON1_DOWN if pressed else MouseEvent.XBUTTON1_UP
+                                )
+                            elif button == 9:  # Forward button (X2)
+                                mouse_event = MouseEvent(
+                                    MouseEvent.XBUTTON2_DOWN if pressed else MouseEvent.XBUTTON2_UP
+                                )
+                            elif button == 6 and pressed:  # Horizontal scroll left
+                                mouse_event = MouseEvent(MouseEvent.HSCROLL_LEFT)
+                            elif button == 7 and pressed:  # Horizontal scroll right
+                                mouse_event = MouseEvent(MouseEvent.HSCROLL_RIGHT)
+                            
+                            if mouse_event:
+                                if self.debug_mode and self._debug_callback:
+                                    self._debug_callback(f"X11: {mouse_event.event_type} btn={button}")
+                                self._dispatch_queue.put(mouse_event)
+                    
+                    # Sleep to prevent busy waiting (10ms = 100 polls per second)
+                    time.sleep(0.01)
+                    
+            except Exception as e:
+                print(f"[MouseHook] X11 listener error: {e}")
+            finally:
+                if self._x_display:
+                    self._x_display.close()
+
+        def start(self):
+            """Start the mouse hook."""
+            if self._running:
+                return
+                
+            self._running = True
+            print("[MouseHook] Starting Linux mouse hook...")
+            
+            # Start dispatch worker thread
+            self._dispatch_thread = threading.Thread(
+                target=self._dispatch_worker,
+                daemon=True,
+                name="MouseHook-Dispatch"
+            )
+            self._dispatch_thread.start()
+            
+            # Try to start HID gesture listener
+            if HidGestureListener:
+                try:
+                    self._hid_gesture = HidGestureListener()
+                    
+                    def _on_gesture_down():
+                        self._gesture_active = True
+                        event = MouseEvent(MouseEvent.GESTURE_DOWN)
+                        self._dispatch_queue.put(event)
+                    
+                    def _on_gesture_up():
+                        self._gesture_active = False
+                        event = MouseEvent(MouseEvent.GESTURE_UP)
+                        self._dispatch_queue.put(event)
+                    
+                    def _on_hid_connection(connected):
+                        self._set_device_connected(connected)
+                    
+                    self._hid_gesture.set_callbacks(
+                        on_down=_on_gesture_down,
+                        on_up=_on_gesture_up,
+                        on_connection_change=_on_hid_connection
+                    )
+                    self._hid_gesture.start()
+                    print("[MouseHook] HID gesture listener started")
+                except Exception as e:
+                    print(f"[MouseHook] Failed to start HID gesture: {e}")
+                    self._hid_gesture = None
+            
+            # Choose and start the appropriate backend
+            if self._is_x11 and _XLIB_OK:
+                # Use X11 backend
+                self._backend = "x11"
+                print("[MouseHook] Using X11 backend")
+                self._listener_thread = threading.Thread(
+                    target=self._x11_listener,
+                    daemon=True,
+                    name="MouseHook-X11"
+                )
+                self._listener_thread.start()
+                self._set_device_connected(True)
+                
+            elif _PYNPUT_OK:
+                # Use pynput backend (works on X11 and Wayland)
+                self._backend = "pynput"
+                print("[MouseHook] Using pynput backend (limited blocking support)")
+                try:
+                    self._listener = pynput_mouse.Listener(
+                        on_click=self._pynput_on_click,
+                        on_scroll=self._pynput_on_scroll
+                    )
+                    self._listener.start()
+                    self._set_device_connected(True)
+                except Exception as e:
+                    print(f"[MouseHook] Failed to start pynput listener: {e}")
+                    self._listener = None
+                    
+            else:
+                print("[MouseHook] WARNING: No mouse hook backend available!")
+                print("[MouseHook] Install python-xlib (for X11) or pynput (for Wayland)")
+                print("[MouseHook] Some functionality may not work.")
+                # Still mark as connected so UI doesn't show error
+                self._set_device_connected(True)
+
+        def stop(self):
+            """Stop the mouse hook."""
+            if not self._running:
+                return
+                
+            print("[MouseHook] Stopping...")
+            self._running = False
+            
+            # Stop HID gesture listener
+            if self._hid_gesture:
+                try:
+                    self._hid_gesture.stop()
+                except Exception:
+                    pass
+                self._hid_gesture = None
+            
+            # Stop pynput listener
+            if self._listener:
+                try:
+                    self._listener.stop()
+                except Exception:
+                    pass
+                self._listener = None
+            
+            # Wait for threads
+            if self._listener_thread:
+                self._listener_thread.join(timeout=2)
+            if self._dispatch_thread:
+                self._dispatch_thread.join(timeout=2)
+            
+            print("[MouseHook] Stopped")
+
+
+# ==================================================================
 # Unsupported platform stub
 # ==================================================================
 

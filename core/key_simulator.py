@@ -542,6 +542,204 @@ elif sys.platform == "darwin":
 
 
 # ==================================================================
+# Linux implementation
+# ==================================================================
+
+elif sys.platform.startswith("linux"):
+    try:
+        from pynput.keyboard import Key, Controller as KeyboardController
+        from pynput.mouse import Controller as MouseController, Button
+        _PYNPUT_OK = True
+    except ImportError:
+        _PYNPUT_OK = False
+        print("[KeySimulator] pynput not installed — pip install pynput")
+        # Create dummy Key class for when pynput is not available
+        class Key:
+            alt = 'alt'
+            tab = 'tab'
+            shift = 'shift'
+            ctrl = 'ctrl'
+            cmd = 'cmd'
+            left = 'left'
+            right = 'right'
+            media_volume_up = 'media_volume_up'
+            media_volume_down = 'media_volume_down'
+            media_volume_mute = 'media_volume_mute'
+            media_play_pause = 'media_play_pause'
+            media_next = 'media_next'
+            media_previous = 'media_previous'
+
+    MOUSEEVENTF_WHEEL  = 0x0800
+    MOUSEEVENTF_HWHEEL = 0x01000
+
+    # Initialize controllers if pynput is available
+    if _PYNPUT_OK:
+        _kbd = KeyboardController()
+        _mouse = MouseController()
+    else:
+        _kbd = None
+        _mouse = None
+
+    def inject_scroll(flags, delta):
+        """Inject a scroll event on Linux using pynput."""
+        if not _PYNPUT_OK or not _mouse:
+            return
+        # Convert Windows delta (typically 120/-120) to scroll units
+        scroll_units = delta / 120.0
+        if flags == MOUSEEVENTF_WHEEL:
+            # Vertical scroll
+            _mouse.scroll(0, scroll_units)
+        else:
+            # Horizontal scroll
+            _mouse.scroll(scroll_units, 0)
+
+    def send_key_combo(keys, hold_ms=50):
+        """Press and release a combination of keys using pynput."""
+        if not _PYNPUT_OK or not _kbd:
+            return
+        # Press all keys
+        for key in keys:
+            _kbd.press(key)
+        
+        if hold_ms:
+            time.sleep(hold_ms / 1000.0)
+        
+        # Release in reverse order
+        for key in reversed(keys):
+            _kbd.release(key)
+
+    def send_key_press(key):
+        """Press and release a single key."""
+        send_key_combo([key])
+
+    # Helper function to check if a media key is available
+    def _has_media_key(key_name):
+        """Check if a media key attribute is available and not just a string placeholder."""
+        return hasattr(Key, key_name) and getattr(Key, key_name) != key_name
+
+    # Linux key mappings using pynput Key objects
+    ACTIONS = {
+        "alt_tab": {
+            "label": "Alt + Tab (Switch Windows)",
+            "keys": [Key.alt, Key.tab],
+            "category": "Navigation",
+        },
+        "alt_shift_tab": {
+            "label": "Alt + Shift + Tab (Switch Windows Reverse)",
+            "keys": [Key.alt, Key.shift, Key.tab],
+            "category": "Navigation",
+        },
+        "browser_back": {
+            "label": "Browser Back (Alt+Left)",
+            "keys": [Key.alt, Key.left],
+            "category": "Browser",
+        },
+        "browser_forward": {
+            "label": "Browser Forward (Alt+Right)",
+            "keys": [Key.alt, Key.right],
+            "category": "Browser",
+        },
+        "copy": {
+            "label": "Copy (Ctrl+C)",
+            "keys": [Key.ctrl, 'c'],
+            "category": "Editing",
+        },
+        "paste": {
+            "label": "Paste (Ctrl+V)",
+            "keys": [Key.ctrl, 'v'],
+            "category": "Editing",
+        },
+        "cut": {
+            "label": "Cut (Ctrl+X)",
+            "keys": [Key.ctrl, 'x'],
+            "category": "Editing",
+        },
+        "undo": {
+            "label": "Undo (Ctrl+Z)",
+            "keys": [Key.ctrl, 'z'],
+            "category": "Editing",
+        },
+        "select_all": {
+            "label": "Select All (Ctrl+A)",
+            "keys": [Key.ctrl, 'a'],
+            "category": "Editing",
+        },
+        "save": {
+            "label": "Save (Ctrl+S)",
+            "keys": [Key.ctrl, 's'],
+            "category": "Editing",
+        },
+        "close_tab": {
+            "label": "Close Tab (Ctrl+W)",
+            "keys": [Key.ctrl, 'w'],
+            "category": "Browser",
+        },
+        "new_tab": {
+            "label": "New Tab (Ctrl+T)",
+            "keys": [Key.ctrl, 't'],
+            "category": "Browser",
+        },
+        "find": {
+            "label": "Find (Ctrl+F)",
+            "keys": [Key.ctrl, 'f'],
+            "category": "Editing",
+        },
+        "win_d": {
+            "label": "Show Desktop (Super+D)",
+            "keys": [Key.cmd, 'd'],  # Super/Windows key
+            "category": "Navigation",
+        },
+        "task_view": {
+            "label": "Activities Overview (Super)",
+            "keys": [Key.cmd],
+            "category": "Navigation",
+        },
+        "volume_up": {
+            "label": "Volume Up",
+            "keys": [Key.media_volume_up] if _has_media_key('media_volume_up') else [],
+            "category": "Media",
+        },
+        "volume_down": {
+            "label": "Volume Down",
+            "keys": [Key.media_volume_down] if _has_media_key('media_volume_down') else [],
+            "category": "Media",
+        },
+        "volume_mute": {
+            "label": "Volume Mute",
+            "keys": [Key.media_volume_mute] if _has_media_key('media_volume_mute') else [],
+            "category": "Media",
+        },
+        "play_pause": {
+            "label": "Play / Pause",
+            "keys": [Key.media_play_pause] if _has_media_key('media_play_pause') else [],
+            "category": "Media",
+        },
+        "next_track": {
+            "label": "Next Track",
+            "keys": [Key.media_next] if _has_media_key('media_next') else [],
+            "category": "Media",
+        },
+        "prev_track": {
+            "label": "Previous Track",
+            "keys": [Key.media_previous] if _has_media_key('media_previous') else [],
+            "category": "Media",
+        },
+        "none": {
+            "label": "Do Nothing (Pass-through)",
+            "keys": [],
+            "category": "Other",
+        },
+    }
+
+    def execute_action(action_id):
+        """Execute an action by its ID."""
+        action = ACTIONS.get(action_id)
+        if not action or not action["keys"]:
+            return
+        send_key_combo(action["keys"])
+
+
+# ==================================================================
 # Unsupported platform stub
 # ==================================================================
 
