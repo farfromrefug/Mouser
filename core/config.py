@@ -84,6 +84,7 @@ DEFAULT_CONFIG = {
         "gesture_deadzone": 40,
         "gesture_timeout_ms": 3000,
         "gesture_cooldown_ms": 500,
+        "appearance_mode": "system",
         "debug_mode": False,
     },
 }
@@ -230,6 +231,7 @@ def _migrate(cfg):
         cfg["version"] = 3
 
     cfg.setdefault("settings", {})
+    cfg["settings"].setdefault("appearance_mode", "system")
     cfg["settings"].setdefault("debug_mode", False)
 
     # Always migrate old wmplayer.exe → Microsoft.Media.Player.exe in profile apps

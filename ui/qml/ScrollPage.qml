@@ -7,6 +7,11 @@ import "Theme.js" as Theme
 Item {
     id: scrollPage
     readonly property var theme: Theme.palette(uiState.darkMode)
+    readonly property var appearanceOptions: [
+        { label: "System", value: "system" },
+        { label: "Light", value: "light" },
+        { label: "Dark", value: "dark" }
+    ]
 
     ScrollView {
         id: pageScroll
@@ -42,7 +47,7 @@ Item {
                     }
 
                     Text {
-                        text: "Adjust pointer speed and scroll behaviour"
+                        text: "Adjust pointer speed, appearance, and scroll behaviour"
                         font {
                             family: uiState.fontFamily
                             pixelSize: 13
@@ -220,6 +225,100 @@ Item {
                                         dpiLabel.text = modelData + " DPI"
                                         backend.setDpi(modelData)
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Item { width: 1; height: 16 }
+
+            Rectangle {
+                width: parent.width - 72
+                anchors.horizontalCenter: parent.horizontalCenter
+                height: appearanceContent.implicitHeight + 40
+                radius: Theme.radius
+                color: scrollPage.theme.bgCard
+                border.width: 1
+                border.color: scrollPage.theme.border
+
+                Column {
+                    id: appearanceContent
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        top: parent.top
+                        margins: 20
+                    }
+                    spacing: 12
+
+                    Text {
+                        text: "Appearance"
+                        font {
+                            family: uiState.fontFamily
+                            pixelSize: 16
+                            bold: true
+                        }
+                        color: scrollPage.theme.textPrimary
+                    }
+
+                    Text {
+                        text: "Choose whether Mouser follows the system, stays light, or stays dark."
+                        font {
+                            family: uiState.fontFamily
+                            pixelSize: 12
+                        }
+                        color: scrollPage.theme.textSecondary
+                    }
+
+                    Row {
+                        width: parent.width
+                        spacing: 10
+
+                        Repeater {
+                            model: scrollPage.appearanceOptions
+
+                            delegate: Rectangle {
+                                required property var modelData
+                                width: Math.max(96, optionText.implicitWidth + 28)
+                                height: 38
+                                radius: 10
+                                color: backend.appearanceMode === modelData.value
+                                       ? scrollPage.theme.accent
+                                       : optionMouse.containsMouse
+                                         ? scrollPage.theme.bgCardHover
+                                         : scrollPage.theme.bgSubtle
+                                border.width: 1
+                                border.color: backend.appearanceMode === modelData.value
+                                              ? scrollPage.theme.accent
+                                              : scrollPage.theme.border
+
+                                Accessible.role: Accessible.Button
+                                Accessible.name: "Appearance " + modelData.label
+
+                                Behavior on color { ColorAnimation { duration: 120 } }
+
+                                Text {
+                                    id: optionText
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    font {
+                                        family: uiState.fontFamily
+                                        pixelSize: 12
+                                        bold: backend.appearanceMode === modelData.value
+                                    }
+                                    color: backend.appearanceMode === modelData.value
+                                           ? scrollPage.theme.bgSidebar
+                                           : scrollPage.theme.textPrimary
+                                }
+
+                                MouseArea {
+                                    id: optionMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: backend.setAppearanceMode(modelData.value)
                                 }
                             }
                         }

@@ -241,6 +241,10 @@ def main():
     _t7 = _time.perf_counter()
     # ── QML Backend ────────────────────────────────────────────
     backend = Backend(engine)
+    ui_state.appearanceMode = backend.appearanceMode
+    backend.settingsChanged.connect(
+        lambda: setattr(ui_state, "appearanceMode", backend.appearanceMode)
+    )
 
     # ── QML Engine ─────────────────────────────────────────────
     qml_engine = QQmlApplicationEngine()

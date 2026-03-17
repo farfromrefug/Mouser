@@ -37,6 +37,7 @@ class ConfigMigrationTests(unittest.TestCase):
         self.assertEqual(migrated["settings"]["gesture_deadzone"], 40)
         self.assertEqual(migrated["settings"]["gesture_timeout_ms"], 3000)
         self.assertEqual(migrated["settings"]["gesture_cooldown_ms"], 500)
+        self.assertEqual(migrated["settings"]["appearance_mode"], "system")
         self.assertFalse(migrated["settings"]["debug_mode"])
         self.assertEqual(
             migrated["profiles"]["default"]["mappings"]["gesture"], "none"
@@ -64,6 +65,7 @@ class ConfigMigrationTests(unittest.TestCase):
             migrated["profiles"]["media"]["apps"],
             ["Microsoft.Media.Player.exe", "VLC.exe"],
         )
+        self.assertEqual(migrated["settings"]["appearance_mode"], "system")
         self.assertFalse(migrated["settings"]["debug_mode"])
 
     def test_load_config_merges_missing_defaults_from_disk(self):
@@ -96,6 +98,7 @@ class ConfigMigrationTests(unittest.TestCase):
 
         self.assertEqual(loaded["settings"]["dpi"], 800)
         self.assertEqual(loaded["settings"]["gesture_threshold"], 50)
+        self.assertEqual(loaded["settings"]["appearance_mode"], "system")
         self.assertFalse(loaded["settings"]["debug_mode"])
         self.assertEqual(loaded["profiles"]["default"]["mappings"]["middle"], "copy")
         self.assertEqual(

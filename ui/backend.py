@@ -163,6 +163,11 @@ class Backend(QObject):
     def gestureThreshold(self):
         return int(self._cfg.get("settings", {}).get("gesture_threshold", 50))
 
+    @Property(str, notify=settingsChanged)
+    def appearanceMode(self):
+        mode = self._cfg.get("settings", {}).get("appearance_mode", "system")
+        return mode if mode in {"system", "light", "dark"} else "system"
+
     @Property(bool, notify=settingsChanged)
     def debugMode(self):
         return bool(self._cfg.get("settings", {}).get("debug_mode", False))
@@ -298,6 +303,15 @@ class Backend(QObject):
         save_config(self._cfg)
         if self._engine:
             self._engine.reload_mappings()
+        self.settingsChanged.emit()
+
+    @Slot(str)
+    def setAppearanceMode(self, mode):
+        normalized = mode if mode in {"system", "light", "dark"} else "system"
+        if self.appearanceMode == normalized:
+            return
+        self._cfg.setdefault("settings", {})["appearance_mode"] = normalized
+        save_config(self._cfg)
         self.settingsChanged.emit()
 
     @Slot(bool)
