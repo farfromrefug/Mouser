@@ -1,14 +1,11 @@
 """
-hid_gesture.py — Detect MX Master 3S gesture button via Logitech HID++.
+hid_gesture.py — Detect Logitech HID++ gesture controls and device features.
 
-The gesture button on a Bluetooth-connected MX Master 3S (without Logi Options+)
-often produces NO standard OS-level mouse event.  This module uses the HID++
-protocol (over hidapi) to:
-
-  1. Open the Logitech vendor-specific HID collection (UP 0xFF43).
-  2. Discover the REPROG_CONTROLS_V4 (0x1B04) feature via IRoot.
-  3. Divert the gesture button (CID 0x00C3) so we receive notifications.
-  4. Fire callbacks on gesture press / release.
+Many Logitech mice expose their gesture button and DPI/battery controls only
+through the HID++ vendor channel instead of standard OS mouse events. This
+module opens the Logitech HID interface, discovers REPROG_CONTROLS_V4 and
+related features, diverts the best gesture candidate it can find, and reports
+press/release or RawXY movement back to Mouser.
 
 Requires:  pip install hidapi
 Falls back gracefully if the package or device are unavailable.
@@ -18,6 +15,13 @@ import sys
 import queue
 import threading
 import time
+
+from core.logi_devices import (
+    DEFAULT_GESTURE_CIDS,
+    build_connected_device_info,
+    clamp_dpi,
+    resolve_device,
+)
 
 try:
     import hid as _hid
@@ -439,8 +443,7 @@ FEAT_REPROG_V4 = 0x1B04      # Reprogrammable Controls V4
 FEAT_ADJ_DPI   = 0x2201      # Adjustable DPI
 FEAT_UNIFIED_BATT   = 0x1004      # Unified Battery (preferred)
 FEAT_BATTERY_STATUS = 0x1000      # Battery Status (fallback)
-DEFAULT_GESTURE_CID = 0x00C3      # "Mouse Gesture Button"
-FALLBACK_GESTURE_CIDS = (0x00D7,)
+DEFAULT_GESTURE_CID = DEFAULT_GESTURE_CIDS[0]
 
 MY_SW          = 0x0A        # arbitrary software-id used in our requests
 
@@ -548,7 +551,7 @@ class HidGestureListener:
         self._battery_feature_id = None
         self._dev_idx   = BT_DEV_IDX
         self._gesture_cid = DEFAULT_GESTURE_CID
-        self._gesture_candidates = [DEFAULT_GESTURE_CID]
+        self._gesture_candidates = list(DEFAULT_GESTURE_CIDS)
         self._held      = False
         self._connected = False         # True while HID++ device is open
         self._rawxy_enabled = False
@@ -556,6 +559,7 @@ class HidGestureListener:
         self._dpi_result  = None        # True/False after apply
         self._pending_battery = None
         self._battery_result = None
+        self._connected_device_info = None
 
     # ── public API ────────────────────────────────────────────────
 
@@ -580,8 +584,13 @@ class HidGestureListener:
             except Exception:
                 pass
             self._dev = None
+        self._connected_device_info = None
         if self._thread:
             self._thread.join(timeout=3)
+
+    @property
+    def connected_device(self):
+        return self._connected_device_info
 
     # ── device discovery ──────────────────────────────────────────
 
@@ -777,13 +786,38 @@ class HidGestureListener:
             )
         return controls
 
-    def _choose_gesture_candidates(self, controls):
+    def _choose_gesture_candidates(self, controls, device_spec=None):
         present = {c["cid"] for c in controls}
         ordered = []
-        for cid in (DEFAULT_GESTURE_CID,) + FALLBACK_GESTURE_CIDS:
+        preferred = tuple(
+            getattr(device_spec, "gesture_cids", ()) or DEFAULT_GESTURE_CIDS
+        )
+
+        def add_candidate(cid):
             if cid in present and cid not in ordered:
                 ordered.append(cid)
-        return ordered or [DEFAULT_GESTURE_CID]
+
+        for cid in preferred:
+            add_candidate(cid)
+
+        for control in controls:
+            cid = control["cid"]
+            flags = int(control.get("flags", 0) or 0)
+            mapping_flags = int(control.get("mapping_flags", 0) or 0)
+            raw_xy_capable = bool(
+                flags & 0x0100
+                or flags & 0x0200
+                or mapping_flags & 0x0010
+                or mapping_flags & 0x0040
+            )
+            virtual_or_named = bool(
+                flags & 0x0080
+                or "gesture" in KNOWN_CID_NAMES.get(cid, "").lower()
+            )
+            if raw_xy_capable and virtual_or_named and flags & 0x0020:
+                add_candidate(cid)
+
+        return ordered or list(preferred)
 
     def _divert(self):
         """Divert the selected gesture control and enable raw XY when supported."""
@@ -825,7 +859,7 @@ class HidGestureListener:
     def set_dpi(self, dpi_value):
         """Queue a DPI change — will be applied on the listener thread.
         Can be called from any thread.  Returns True on success."""
-        dpi = max(200, min(8200, int(dpi_value)))  # MX Master 3S max is 8000
+        dpi = clamp_dpi(dpi_value, self._connected_device_info)
         self._dpi_result = None
         self._pending_dpi = dpi
         # Wait up to 3s for the listener thread to apply it
@@ -1027,12 +1061,17 @@ class HidGestureListener:
             pid = info.get("product_id", 0)
             up = info.get("usage_page", 0)
             usage = info.get("usage", 0)
+            product = info.get("product_string")
+            source = info.get("source", "unknown")
+            device_spec = resolve_device(product_id=pid, product_name=product)
             self._feat_idx = None
             self._dpi_idx = None
             self._battery_idx = None
             self._battery_feature_id = None
             self._gesture_cid = DEFAULT_GESTURE_CID
-            self._gesture_candidates = [DEFAULT_GESTURE_CID]
+            self._gesture_candidates = list(
+                getattr(device_spec, "gesture_cids", ()) or DEFAULT_GESTURE_CIDS
+            )
             self._rawxy_enabled = False
             open_attempts = []
             if _BACKEND_PREFERENCE in ("auto", "hidapi") and info.get("path"):
@@ -1089,7 +1128,10 @@ class HidGestureListener:
                     print(f"[HidGesture] Found REPROG_V4 @0x{fi:02X}  "
                           f"PID=0x{pid:04X} devIdx=0x{idx:02X}")
                     controls = self._discover_reprog_controls()
-                    self._gesture_candidates = self._choose_gesture_candidates(controls)
+                    self._gesture_candidates = self._choose_gesture_candidates(
+                        controls,
+                        device_spec=device_spec,
+                    )
                     print("[HidGesture] Gesture CID candidates: "
                           + ", ".join(_format_cid(cid) for cid in self._gesture_candidates))
                     # Also discover ADJUSTABLE_DPI
@@ -1109,6 +1151,13 @@ class HidGestureListener:
                             self._battery_feature_id = FEAT_BATTERY_STATUS
                             print(f"[HidGesture] Found BATTERY_STATUS @0x{batt_fi:02X}")
                     if self._divert():
+                        self._connected_device_info = build_connected_device_info(
+                            product_id=pid,
+                            product_name=product,
+                            transport=open_info.get("transport") or transport,
+                            source=source,
+                            gesture_cids=self._gesture_candidates,
+                        )
                         return True
                     break        # right device but divert failed
 
@@ -1170,8 +1219,9 @@ class HidGestureListener:
             self._pending_battery = None
             self._held = False
             self._gesture_cid = DEFAULT_GESTURE_CID
-            self._gesture_candidates = [DEFAULT_GESTURE_CID]
+            self._gesture_candidates = list(DEFAULT_GESTURE_CIDS)
             self._rawxy_enabled = False
+            self._connected_device_info = None
             if self._connected:
                 self._connected = False
                 if self._on_disconnect:

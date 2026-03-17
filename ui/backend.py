@@ -13,6 +13,8 @@ from core.config import (
     PROFILE_BUTTON_NAMES, set_mapping, create_profile, delete_profile,
     KNOWN_APPS, get_icon_for_exe,
 )
+from core.device_layouts import get_device_layout, get_manual_layout_choices
+from core.logi_devices import DEFAULT_DPI_MAX, DEFAULT_DPI_MIN, clamp_dpi
 from core.key_simulator import ACTIONS
 
 
@@ -36,6 +38,8 @@ class Backend(QObject):
     debugEventsEnabledChanged = Signal()
     gestureStateChanged = Signal()
     gestureRecordsChanged = Signal()
+    deviceInfoChanged = Signal()
+    deviceLayoutChanged = Signal()
 
     # Internal cross-thread signals
     _profileSwitchRequest = Signal(str)
@@ -50,6 +54,12 @@ class Backend(QObject):
         self._engine = engine
         self._cfg = load_config()
         self._mouse_connected = False
+        self._device_display_name = "Logitech mouse"
+        self._connected_device_key = ""
+        self._device_layout_override_key = ""
+        self._device_layout = get_device_layout("generic_mouse")
+        self._device_dpi_min = DEFAULT_DPI_MIN
+        self._device_dpi_max = DEFAULT_DPI_MAX
         self._battery_level = -1
         self._debug_lines = []
         self._debug_events_enabled = bool(
@@ -92,6 +102,9 @@ class Backend(QObject):
                 engine.set_gesture_event_callback(self._onEngineGestureEvent)
             if hasattr(engine, "set_debug_enabled"):
                 engine.set_debug_enabled(self.debugMode)
+        self._apply_device_layout(
+            getattr(engine, "connected_device", None) if engine else None
+        )
 
     # ── Properties ─────────────────────────────────────────────
 
@@ -188,6 +201,58 @@ class Backend(QObject):
     def mouseConnected(self):
         return self._mouse_connected
 
+    @Property(str, notify=deviceInfoChanged)
+    def deviceDisplayName(self):
+        return self._device_display_name
+
+    @Property(str, notify=deviceInfoChanged)
+    def connectedDeviceKey(self):
+        return self._connected_device_key
+
+    @Property(int, notify=deviceInfoChanged)
+    def deviceDpiMin(self):
+        return self._device_dpi_min
+
+    @Property(int, notify=deviceInfoChanged)
+    def deviceDpiMax(self):
+        return self._device_dpi_max
+
+    @Property(str, notify=deviceLayoutChanged)
+    def deviceImageAsset(self):
+        return self._device_layout.get("image_asset", "mouse.png")
+
+    @Property(int, notify=deviceLayoutChanged)
+    def deviceImageWidth(self):
+        return int(self._device_layout.get("image_width", 460))
+
+    @Property(int, notify=deviceLayoutChanged)
+    def deviceImageHeight(self):
+        return int(self._device_layout.get("image_height", 360))
+
+    @Property(bool, notify=deviceLayoutChanged)
+    def hasInteractiveDeviceLayout(self):
+        return bool(self._device_layout.get("interactive", True))
+
+    @Property(str, notify=deviceLayoutChanged)
+    def deviceLayoutNote(self):
+        return self._device_layout.get("note", "")
+
+    @Property(list, notify=deviceLayoutChanged)
+    def deviceHotspots(self):
+        return list(self._device_layout.get("hotspots", []))
+
+    @Property(list, constant=True)
+    def manualLayoutChoices(self):
+        return get_manual_layout_choices()
+
+    @Property(str, notify=deviceLayoutChanged)
+    def deviceLayoutOverrideKey(self):
+        return self._device_layout_override_key
+
+    @Property(str, notify=deviceLayoutChanged)
+    def effectiveDeviceLayoutKey(self):
+        return self._device_layout.get("key", "generic_mouse")
+
     @Property(int, notify=batteryLevelChanged)
     def batteryLevel(self):
         return self._battery_level
@@ -274,10 +339,12 @@ class Backend(QObject):
 
     @Slot(int)
     def setDpi(self, value):
-        self._cfg.setdefault("settings", {})["dpi"] = value
+        device = getattr(self._engine, "connected_device", None) if self._engine else None
+        dpi = clamp_dpi(value, device)
+        self._cfg.setdefault("settings", {})["dpi"] = dpi
         save_config(self._cfg)
         if self._engine:
-            self._engine.set_dpi(value)
+            self._engine.set_dpi(dpi)
         self.settingsChanged.emit()
 
     @Slot(bool)
@@ -417,6 +484,35 @@ class Backend(QObject):
     def actionLabelFor(self, actionId):
         return _action_label(actionId)
 
+    @Slot(str)
+    def setDeviceLayoutOverride(self, layoutKey):
+        normalized = (layoutKey or "").strip()
+        device_key = self._connected_device_key
+        if not self._mouse_connected or not device_key:
+            self.statusMessage.emit("Connect a device first")
+            return
+        valid_choices = {choice["key"] for choice in get_manual_layout_choices()}
+        if normalized not in valid_choices:
+            self.statusMessage.emit("Unknown layout option")
+            return
+
+        overrides = self._cfg.setdefault("settings", {}).setdefault(
+            "device_layout_overrides",
+            {},
+        )
+        if normalized:
+            overrides[device_key] = normalized
+        else:
+            overrides.pop(device_key, None)
+        save_config(self._cfg)
+
+        device = getattr(self._engine, "connected_device", None) if self._engine else None
+        self._apply_device_layout(device)
+        if normalized:
+            self.statusMessage.emit("Experimental layout applied")
+        else:
+            self.statusMessage.emit("Layout reset to auto-detect")
+
     # ── Engine thread callbacks (cross-thread safe) ────────────
 
     def _onEngineProfileSwitch(self, profile_name):
@@ -463,6 +559,11 @@ class Backend(QObject):
     def _handleConnectionChange(self, connected):
         """Runs on Qt main thread."""
         self._mouse_connected = connected
+        device = getattr(self._engine, "connected_device", None) if self._engine else None
+        if connected:
+            self._apply_device_layout(device)
+        else:
+            self._apply_device_layout(None)
         if not connected and self._battery_level != -1:
             self._battery_level = -1
             self.batteryLevelChanged.emit()
@@ -470,6 +571,54 @@ class Backend(QObject):
         self._append_debug_line(
             f"Mouse {'connected' if connected else 'disconnected'}"
         )
+
+    def _apply_device_layout(self, device):
+        device_key = getattr(device, "key", "") or ""
+        display_name = getattr(device, "display_name", "") or "Logitech mouse"
+        dpi_min = getattr(device, "dpi_min", DEFAULT_DPI_MIN) or DEFAULT_DPI_MIN
+        dpi_max = getattr(device, "dpi_max", DEFAULT_DPI_MAX) or DEFAULT_DPI_MAX
+        info_changed = False
+        if display_name != self._device_display_name:
+            self._device_display_name = display_name
+            info_changed = True
+        if device_key != self._connected_device_key:
+            self._connected_device_key = device_key
+            info_changed = True
+        if dpi_min != self._device_dpi_min:
+            self._device_dpi_min = dpi_min
+            info_changed = True
+        if dpi_max != self._device_dpi_max:
+            self._device_dpi_max = dpi_max
+            info_changed = True
+        if info_changed:
+            self.deviceInfoChanged.emit()
+
+        current_dpi = self._cfg.get("settings", {}).get("dpi", DEFAULT_DPI_MIN)
+        if device is not None:
+            clamped_dpi = clamp_dpi(current_dpi, device)
+            if clamped_dpi != current_dpi:
+                self._cfg.setdefault("settings", {})["dpi"] = clamped_dpi
+                save_config(self._cfg)
+                if self._engine:
+                    self._engine.set_dpi(clamped_dpi)
+                self.settingsChanged.emit()
+
+        overrides = self._cfg.get("settings", {}).get("device_layout_overrides", {})
+        valid_override_keys = {choice["key"] for choice in get_manual_layout_choices()}
+        override_key = overrides.get(device_key, "") if device_key else ""
+        if override_key not in valid_override_keys:
+            override_key = ""
+        layout_key = override_key or getattr(device, "ui_layout", None) or "generic_mouse"
+        layout = get_device_layout(layout_key)
+        layout_changed = False
+        if override_key != self._device_layout_override_key:
+            self._device_layout_override_key = override_key
+            layout_changed = True
+        if layout != self._device_layout:
+            self._device_layout = layout
+            layout_changed = True
+        if layout_changed:
+            self.deviceLayoutChanged.emit()
 
     @Slot(int)
     def _handleBatteryChange(self, level):

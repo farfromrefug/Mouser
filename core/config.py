@@ -53,7 +53,7 @@ BUTTON_TO_EVENTS = {
 }
 
 DEFAULT_CONFIG = {
-    "version": 3,
+    "version": 4,
     "active_profile": "default",
     "profiles": {
         "default": {
@@ -86,6 +86,7 @@ DEFAULT_CONFIG = {
         "gesture_cooldown_ms": 500,
         "appearance_mode": "system",
         "debug_mode": False,
+        "device_layout_overrides": {},
     },
 }
 
@@ -230,9 +231,15 @@ def _migrate(cfg):
                 mappings.setdefault(key, "none")
         cfg["version"] = 3
 
+    if version < 4:
+        settings = cfg.setdefault("settings", {})
+        settings.setdefault("device_layout_overrides", {})
+        cfg["version"] = 4
+
     cfg.setdefault("settings", {})
     cfg["settings"].setdefault("appearance_mode", "system")
     cfg["settings"].setdefault("debug_mode", False)
+    cfg["settings"].setdefault("device_layout_overrides", {})
 
     # Always migrate old wmplayer.exe → Microsoft.Media.Player.exe in profile apps
     for pdata in cfg.get("profiles", {}).values():

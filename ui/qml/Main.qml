@@ -11,7 +11,9 @@ ApplicationWindow {
     height: 700
     minimumWidth: 920
     minimumHeight: 620
-    title: "Mouser — MX Master 3S"
+    title: backend.mouseConnected
+           ? "Mouser — " + backend.deviceDisplayName
+           : "Mouser"
 
     property string appearanceMode: uiState.appearanceMode
     readonly property bool darkMode: appearanceMode === "dark"

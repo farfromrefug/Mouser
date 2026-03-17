@@ -12,6 +12,16 @@ Item {
         { label: "Light", value: "light" },
         { label: "Dark", value: "dark" }
     ]
+    readonly property var allDpiPresets: [400, 800, 1000, 1600, 2400, 4000, 6000, 8000]
+    readonly property var dpiPresets: {
+        var presets = []
+        for (var i = 0; i < allDpiPresets.length; i++) {
+            var preset = allDpiPresets[i]
+            if (preset >= backend.deviceDpiMin && preset <= backend.deviceDpiMax)
+                presets.push(preset)
+        }
+        return presets
+    }
 
     ScrollView {
         id: pageScroll
@@ -97,7 +107,10 @@ Item {
                     }
 
                     Text {
-                        text: "Adjust the tracking speed of the sensor. Higher = faster pointer."
+                        text: backend.deviceDpiMin === 200 && backend.deviceDpiMax === 8000
+                              ? "Adjust the tracking speed of the sensor. Higher = faster pointer."
+                              : "Adjust the tracking speed of the sensor. This device supports "
+                                + backend.deviceDpiMin + " to " + backend.deviceDpiMax + " DPI."
                         font {
                             family: uiState.fontFamily
                             pixelSize: 12
@@ -110,7 +123,7 @@ Item {
                         spacing: 12
 
                         Text {
-                            text: "200"
+                            text: backend.deviceDpiMin
                             font {
                                 family: uiState.fontFamily
                                 pixelSize: 11
@@ -121,8 +134,8 @@ Item {
                         Slider {
                             id: dpiSlider
                             Layout.fillWidth: true
-                            from: 200
-                            to: 8000
+                            from: backend.deviceDpiMin
+                            to: backend.deviceDpiMax
                             stepSize: 50
                             value: backend.dpi
                             Material.accent: scrollPage.theme.accent
@@ -135,7 +148,7 @@ Item {
                         }
 
                         Text {
-                            text: "8000"
+                            text: backend.deviceDpiMax
                             font {
                                 family: uiState.fontFamily
                                 pixelSize: 11
@@ -183,7 +196,7 @@ Item {
                         }
 
                         Repeater {
-                            model: [400, 800, 1000, 1600, 2400, 4000, 6000, 8000]
+                            model: scrollPage.dpiPresets
 
                             delegate: Rectangle {
                                 width: presetText.implicitWidth + 20

@@ -181,6 +181,53 @@ Item {
         return "Tap: " + gestureTapActionLabel + " | Swipes configured"
     }
 
+    function hotspotSublabel(hotspot) {
+        if (!hotspot)
+            return ""
+        if (hotspot.summaryType === "gesture")
+            return gestureSummary()
+        if (hotspot.summaryType === "hscroll")
+            return "L: " + hscrollLeftActionLabel + " | R: " + hscrollRightActionLabel
+        return actionFor(hotspot.buttonKey)
+    }
+
+    function layoutHasButton(buttonKey) {
+        var hotspots = backend.deviceHotspots
+        for (var i = 0; i < hotspots.length; i++) {
+            if (hotspots[i].buttonKey === buttonKey)
+                return true
+        }
+        return false
+    }
+
+    function manualLayoutChoiceIndex(layoutKey) {
+        var choices = backend.manualLayoutChoices
+        for (var i = 0; i < choices.length; i++) {
+            if (choices[i].key === layoutKey)
+                return i
+        }
+        return 0
+    }
+
+    function currentLayoutChoiceLabel() {
+        var idx = manualLayoutChoiceIndex(backend.deviceLayoutOverrideKey)
+        var choices = backend.manualLayoutChoices
+        if (idx >= 0 && idx < choices.length)
+            return choices[idx].label
+        return "Auto-detect"
+    }
+
+    Connections {
+        target: backend
+        function onDeviceLayoutChanged() {
+            if (selectedButton !== "" && !layoutHasButton(selectedButton)) {
+                selectedButton = ""
+                selectedButtonName = ""
+                selectedActionId = ""
+            }
+        }
+    }
+
     // ── Main two-column layout ────────────────────────────────
     Row {
         anchors.fill: parent
@@ -407,7 +454,7 @@ Item {
                                     spacing: 8
 
                                     Text {
-                                        text: "MX Master 3S"
+                                        text: backend.deviceDisplayName
                                         font { family: uiState.fontFamily; pixelSize: 20; bold: true }
                                         color: theme.textPrimary
                                     }
@@ -431,7 +478,11 @@ Item {
                                 }
 
                                 Text {
-                                    text: "Click a dot to configure its action"
+                                    text: !backend.mouseConnected
+                                          ? "Turn on your Logitech mouse to start customizing buttons"
+                                          : backend.hasInteractiveDeviceLayout
+                                            ? "Click a dot to configure its action"
+                                            : "Choose a layout mode below while we build a dedicated overlay"
                                     font { family: uiState.fontFamily; pixelSize: 12 }
                                     color: theme.textSecondary
                                 }
@@ -571,6 +622,60 @@ Item {
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
 
+                    Rectangle {
+                        visible: backend.mouseConnected
+                                 && (!backend.hasInteractiveDeviceLayout
+                                 || backend.deviceLayoutOverrideKey !== ""
+                                 )
+                        width: Math.min(parent.width - 56, 700)
+                        anchors.left: parent.left
+                        anchors.leftMargin: 28
+                        height: layoutModeCol.implicitHeight + 28
+                        radius: 14
+                        color: theme.bgCard
+                        border.width: 1
+                        border.color: theme.border
+
+                        Column {
+                            id: layoutModeCol
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            spacing: 8
+
+                            Text {
+                                text: "Layout mode"
+                                font { family: uiState.fontFamily; pixelSize: 13; bold: true }
+                                color: theme.textPrimary
+                            }
+
+                            Text {
+                                width: parent.width
+                                wrapMode: Text.WordWrap
+                                text: backend.deviceLayoutOverrideKey !== ""
+                                      ? "Experimental override active: " + currentLayoutChoiceLabel()
+                                        + ". Switch back to Auto-detect if the hotspot map does not line up."
+                                      : backend.deviceLayoutNote
+                                font { family: uiState.fontFamily; pixelSize: 11 }
+                                color: theme.textSecondary
+                            }
+
+                            ComboBox {
+                                id: layoutOverrideCombo
+                                width: Math.min(parent.width, 320)
+                                model: backend.manualLayoutChoices
+                                textRole: "label"
+                                Material.accent: theme.accent
+                                font { family: uiState.fontFamily; pixelSize: 11 }
+                                currentIndex: manualLayoutChoiceIndex(backend.deviceLayoutOverrideKey)
+                                onActivated: function(index) {
+                                    backend.setDeviceLayoutOverride(
+                                        backend.manualLayoutChoices[index].key
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // ── Mouse image with hotspots ─────────────
                     Item {
                         id: mouseImageArea
@@ -584,11 +689,12 @@ Item {
 
                         Image {
                             id: mouseImg
-                            source: "file:///" + applicationDirPath + "/images/mouse.png"
+                            source: "file:///" + applicationDirPath + "/images/" + backend.deviceImageAsset
                             fillMode: Image.PreserveAspectFit
-                            width: 460
-                            height: 360
+                            width: backend.deviceImageWidth
+                            height: backend.deviceImageHeight
                             anchors.centerIn: parent
+                            visible: backend.mouseConnected
                             smooth: true
                             mipmap: true
                             asynchronous: true
@@ -598,61 +704,158 @@ Item {
                             property real offY: (height - paintedHeight) / 2
                         }
 
-                        // Hotspot dots
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.35; normY: 0.4
-                            buttonKey: "middle"
-                            label: "Middle button"
-                            sublabel: actionFor("middle")
-                            labelSide: "right"
-                            labelOffX: 100; labelOffY: -160
+                        Rectangle {
+                            visible: !backend.mouseConnected
+                            width: Math.min(parent.width - 120, 760)
+                            height: emptyStateCol.implicitHeight + 52
+                            radius: 24
+                            anchors.centerIn: parent
+                            color: theme.bgCard
+                            border.width: 1
+                            border.color: theme.border
+
+                            Column {
+                                id: emptyStateCol
+                                anchors.fill: parent
+                                anchors.margins: 26
+                                spacing: 14
+
+                                Rectangle {
+                                    width: waitingRow.implicitWidth + 16
+                                    height: 28
+                                    radius: 14
+                                    color: Qt.rgba(0.9, 0.3, 0.3, uiState.darkMode ? 0.18 : 0.10)
+
+                                    Row {
+                                        id: waitingRow
+                                        anchors.centerIn: parent
+                                        spacing: 8
+
+                                        Rectangle {
+                                            width: 8
+                                            height: 8
+                                            radius: 4
+                                            color: "#e05555"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+
+                                        Text {
+                                            text: "Waiting for connection"
+                                            font { family: uiState.fontFamily; pixelSize: 11; bold: true }
+                                            color: "#e05555"
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: "Connect your Logitech mouse"
+                                    wrapMode: Text.WordWrap
+                                    font { family: uiState.fontFamily; pixelSize: 26; bold: true }
+                                    color: theme.textPrimary
+                                }
+
+                                Text {
+                                    width: Math.min(parent.width, 680)
+                                    text: "Mouser will detect the active device, unlock button mapping, and enable the correct layout mode as soon as the mouse is available."
+                                    wrapMode: Text.WordWrap
+                                    font { family: uiState.fontFamily; pixelSize: 13 }
+                                    color: theme.textSecondary
+                                }
+
+                                Flow {
+                                    width: parent.width
+                                    spacing: 10
+
+                                    Rectangle {
+                                        width: firstHint.implicitWidth + 20
+                                        height: 30
+                                        radius: 15
+                                        color: theme.bgSubtle
+                                        border.width: 1
+                                        border.color: theme.border
+
+                                        Text {
+                                            id: firstHint
+                                            anchors.centerIn: parent
+                                            text: "Layout mode appears automatically"
+                                            font { family: uiState.fontFamily; pixelSize: 11 }
+                                            color: theme.textSecondary
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: secondHint.implicitWidth + 20
+                                        height: 30
+                                        radius: 15
+                                        color: theme.bgSubtle
+                                        border.width: 1
+                                        border.color: theme.border
+
+                                        Text {
+                                            id: secondHint
+                                            anchors.centerIn: parent
+                                            text: "Per-device settings stay separate"
+                                            font { family: uiState.fontFamily; pixelSize: 11 }
+                                            color: theme.textSecondary
+                                        }
+                                    }
+                                }
+                            }
                         }
 
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.7; normY: 0.63
-                            buttonKey: "gesture"
-                            label: "Gesture button"
-                            sublabel: gestureSummary()
-                            labelSide: "left"
-                            labelOffX: -200; labelOffY: 60
+                        Repeater {
+                            model: backend.deviceHotspots
+
+                            delegate: HotspotDot {
+                                required property int index
+                                readonly property var hotspot: backend.deviceHotspots[index]
+                                anchors.fill: mouseImageArea
+                                imgItem: mouseImg
+                                normX: Number(hotspot["normX"] || 0)
+                                normY: Number(hotspot["normY"] || 0)
+                                buttonKey: String(hotspot["buttonKey"] || "")
+                                isHScroll: hotspot["isHScroll"] === true
+                                label: String(hotspot["label"] || hotspot["buttonKey"] || "")
+                                sublabel: hotspotSublabel(hotspot)
+                                labelSide: String(hotspot["labelSide"] || "right")
+                                labelOffX: hotspot["labelOffX"] === undefined ? 120 : Number(hotspot["labelOffX"])
+                                labelOffY: hotspot["labelOffY"] === undefined ? -30 : Number(hotspot["labelOffY"])
+                            }
                         }
 
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.6; normY: 0.48
-                            buttonKey: "xbutton2"
-                            label: "Forward button"
-                            sublabel: actionFor("xbutton2")
-                            labelSide: "left"
-                            labelOffX: -300; labelOffY: 0
-                        }
+                        Rectangle {
+                            visible: backend.mouseConnected && !backend.hasInteractiveDeviceLayout
+                            width: Math.min(420, parent.width - 48)
+                            height: fallbackCol.implicitHeight + 32
+                            radius: 16
+                            color: theme.bgCard
+                            border.width: 1
+                            border.color: theme.border
+                            anchors.centerIn: parent
 
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.65; normY: 0.4
-                            buttonKey: "xbutton1"
-                            label: "Back button"
-                            sublabel: actionFor("xbutton1")
-                            labelSide: "right"
-                            labelOffX: 200; labelOffY: 50
-                        }
+                            Column {
+                                id: fallbackCol
+                                anchors.fill: parent
+                                anchors.margins: 16
+                                spacing: 10
 
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.6; normY: 0.375
-                            buttonKey: "hscroll_left"
-                            isHScroll: true
-                            label: "Horizontal scroll"
-                            sublabel: "L: " + hscrollLeftActionLabel + " | R: " + hscrollRightActionLabel
-                            labelSide: "right"
-                            labelOffX: 200; labelOffY: -50
+                                Text {
+                                    text: "Interactive layout coming later"
+                                    width: parent.width
+                                    font { family: uiState.fontFamily; pixelSize: 15; bold: true }
+                                    color: theme.textPrimary
+                                }
+
+                                Text {
+                                    text: backend.deviceLayoutNote
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
+                                    font { family: uiState.fontFamily; pixelSize: 12 }
+                                    color: theme.textSecondary
+                                }
+
+                            }
                         }
                     }
 

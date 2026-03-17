@@ -28,7 +28,7 @@ class ConfigMigrationTests(unittest.TestCase):
 
         migrated = config._migrate(legacy)
 
-        self.assertEqual(migrated["version"], 3)
+        self.assertEqual(migrated["version"], 4)
         self.assertEqual(migrated["profiles"]["default"]["apps"], [])
         self.assertFalse(migrated["settings"]["invert_hscroll"])
         self.assertFalse(migrated["settings"]["invert_vscroll"])
@@ -39,6 +39,7 @@ class ConfigMigrationTests(unittest.TestCase):
         self.assertEqual(migrated["settings"]["gesture_cooldown_ms"], 500)
         self.assertEqual(migrated["settings"]["appearance_mode"], "system")
         self.assertFalse(migrated["settings"]["debug_mode"])
+        self.assertEqual(migrated["settings"]["device_layout_overrides"], {})
         self.assertEqual(
             migrated["profiles"]["default"]["mappings"]["gesture"], "none"
         )
@@ -67,6 +68,7 @@ class ConfigMigrationTests(unittest.TestCase):
         )
         self.assertEqual(migrated["settings"]["appearance_mode"], "system")
         self.assertFalse(migrated["settings"]["debug_mode"])
+        self.assertEqual(migrated["settings"]["device_layout_overrides"], {})
 
     def test_load_config_merges_missing_defaults_from_disk(self):
         partial = {
@@ -100,6 +102,7 @@ class ConfigMigrationTests(unittest.TestCase):
         self.assertEqual(loaded["settings"]["gesture_threshold"], 50)
         self.assertEqual(loaded["settings"]["appearance_mode"], "system")
         self.assertFalse(loaded["settings"]["debug_mode"])
+        self.assertEqual(loaded["settings"]["device_layout_overrides"], {})
         self.assertEqual(loaded["profiles"]["default"]["mappings"]["middle"], "copy")
         self.assertEqual(
             loaded["profiles"]["default"]["mappings"]["xbutton1"], "alt_tab"

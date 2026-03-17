@@ -265,6 +265,7 @@ if sys.platform == "win32":
             self._gesture_delta_y = 0.0
             self._gesture_cooldown_until = 0.0
             self._gesture_input_source = None
+            self._connected_device = None
 
         def register(self, event_type, callback):
             self._callbacks.setdefault(event_type, []).append(callback)
@@ -298,6 +299,10 @@ if sys.platform == "win32":
         @property
         def device_connected(self):
             return self._device_connected
+
+        @property
+        def connected_device(self):
+            return self._connected_device
 
         def _set_device_connected(self, connected):
             if connected == self._device_connected:
@@ -841,9 +846,13 @@ if sys.platform == "win32":
             self._accumulate_gesture_delta(delta_x, delta_y, "hid_rawxy")
 
         def _on_hid_connect(self):
+            self._connected_device = (
+                self._hid_gesture.connected_device if self._hid_gesture else None
+            )
             self._set_device_connected(True)
 
         def _on_hid_disconnect(self):
+            self._connected_device = None
             self._set_device_connected(False)
 
         def start(self):
@@ -867,8 +876,9 @@ if sys.platform == "win32":
                     on_connect=self._on_hid_connect,
                     on_disconnect=self._on_hid_disconnect,
                 )
-                if listener.start():
-                    self._hid_gesture = listener
+                self._hid_gesture = listener
+                if not listener.start():
+                    self._hid_gesture = None
             return True
 
         def stop(self):
@@ -876,6 +886,7 @@ if sys.platform == "win32":
             if self._hid_gesture:
                 self._hid_gesture.stop()
                 self._hid_gesture = None
+            self._connected_device = None
             if self._thread_id:
                 PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
             if self._hook_thread:
@@ -944,6 +955,7 @@ elif sys.platform == "darwin":
             self._gesture_delta_y = 0.0
             self._gesture_cooldown_until = 0.0
             self._gesture_input_source = None
+            self._connected_device = None
 
         def register(self, event_type, callback):
             self._callbacks.setdefault(event_type, []).append(callback)
@@ -975,6 +987,10 @@ elif sys.platform == "darwin":
         @property
         def device_connected(self):
             return self._device_connected
+
+        @property
+        def connected_device(self):
+            return self._connected_device
 
         def _set_device_connected(self, connected):
             if connected == self._device_connected:
@@ -1422,9 +1438,13 @@ elif sys.platform == "darwin":
             self._accumulate_gesture_delta(delta_x, delta_y, "hid_rawxy")
 
         def _on_hid_connect(self):
+            self._connected_device = (
+                self._hid_gesture.connected_device if self._hid_gesture else None
+            )
             self._set_device_connected(True)
 
         def _on_hid_disconnect(self):
+            self._connected_device = None
             self._set_device_connected(False)
 
         def start(self):
@@ -1481,8 +1501,9 @@ elif sys.platform == "darwin":
                     on_connect=self._on_hid_connect,
                     on_disconnect=self._on_hid_disconnect,
                 )
-                if listener.start():
-                    self._hid_gesture = listener
+                self._hid_gesture = listener
+                if not listener.start():
+                    self._hid_gesture = None
             return True
 
         def stop(self):
@@ -1490,6 +1511,7 @@ elif sys.platform == "darwin":
             if self._hid_gesture:
                 self._hid_gesture.stop()
                 self._hid_gesture = None
+            self._connected_device = None
 
             if self._tap:
                 Quartz.CGEventTapEnable(self._tap, False)
@@ -1525,6 +1547,7 @@ else:
             self._device_connected = False
             self._connection_change_cb = None
             self._gesture_callback = None
+            self._connected_device = None
             print(f"[MouseHook] Platform \'{sys.platform}\' not supported")
 
         def register(self, event_type, callback): pass
@@ -1538,5 +1561,7 @@ else:
         def set_connection_change_callback(self, cb): pass
         @property
         def device_connected(self): return False
+        @property
+        def connected_device(self): return None
         def start(self): pass
         def stop(self): pass

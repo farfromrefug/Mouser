@@ -12,6 +12,7 @@ from core.config import (
     BUTTON_TO_EVENTS, GESTURE_DIRECTION_BUTTONS, save_config,
 )
 from core.app_detector import AppDetector
+from core.logi_devices import clamp_dpi
 
 
 class Engine:
@@ -254,6 +255,10 @@ class Engine:
         return self.hook.device_connected
 
     @property
+    def connected_device(self):
+        return getattr(self.hook, "connected_device", None)
+
+    @property
     def enabled(self):
         return self._enabled
 
@@ -262,12 +267,13 @@ class Engine:
     # ------------------------------------------------------------------
     def set_dpi(self, dpi_value):
         """Send DPI change to the mouse via HID++."""
-        self.cfg.setdefault("settings", {})["dpi"] = dpi_value
+        dpi = clamp_dpi(dpi_value, self.connected_device)
+        self.cfg.setdefault("settings", {})["dpi"] = dpi
         save_config(self.cfg)
         # Try via the hook's HidGestureListener
         hg = self.hook._hid_gesture
         if hg:
-            return hg.set_dpi(dpi_value)
+            return hg.set_dpi(dpi)
         print("[Engine] No HID++ connection — DPI not applied")
         return False
 
