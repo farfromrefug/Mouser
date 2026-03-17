@@ -56,7 +56,7 @@ class Backend(QObject):
         self._device_display_name = "Logitech mouse"
         self._connected_device_key = ""
         self._device_layout_override_key = ""
-        self._device_layout = get_device_layout("mx_master")
+        self._device_layout = get_device_layout("generic_mouse")
         self._battery_level = -1
         self._debug_lines = []
         self._debug_events_enabled = bool(
@@ -475,7 +475,7 @@ class Backend(QObject):
     def setDeviceLayoutOverride(self, layoutKey):
         normalized = (layoutKey or "").strip()
         device_key = self._connected_device_key
-        if not device_key:
+        if not self._mouse_connected or not device_key:
             self.statusMessage.emit("Connect a device first")
             return
         valid_choices = {choice["key"] for choice in get_manual_layout_choices()}
@@ -549,6 +549,8 @@ class Backend(QObject):
         device = getattr(self._engine, "connected_device", None) if self._engine else None
         if connected:
             self._apply_device_layout(device)
+        else:
+            self._apply_device_layout(None)
         if not connected and self._battery_level != -1:
             self._battery_level = -1
             self.batteryLevelChanged.emit()
@@ -571,8 +573,11 @@ class Backend(QObject):
             self.deviceInfoChanged.emit()
 
         overrides = self._cfg.get("settings", {}).get("device_layout_overrides", {})
+        valid_override_keys = {choice["key"] for choice in get_manual_layout_choices()}
         override_key = overrides.get(device_key, "") if device_key else ""
-        layout_key = override_key or getattr(device, "ui_layout", None) or "mx_master"
+        if override_key not in valid_override_keys:
+            override_key = ""
+        layout_key = override_key or getattr(device, "ui_layout", None) or "generic_mouse"
         layout = get_device_layout(layout_key)
         layout_changed = False
         if override_key != self._device_layout_override_key:
