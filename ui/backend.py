@@ -13,6 +13,7 @@ from core.config import (
     PROFILE_BUTTON_NAMES, set_mapping, create_profile, delete_profile,
     KNOWN_APPS, get_icon_for_exe,
 )
+from core.device_layouts import get_device_layout
 from core.key_simulator import ACTIONS
 
 
@@ -37,6 +38,7 @@ class Backend(QObject):
     gestureStateChanged = Signal()
     gestureRecordsChanged = Signal()
     deviceInfoChanged = Signal()
+    deviceLayoutChanged = Signal()
 
     # Internal cross-thread signals
     _profileSwitchRequest = Signal(str)
@@ -52,6 +54,7 @@ class Backend(QObject):
         self._cfg = load_config()
         self._mouse_connected = False
         self._device_display_name = "Logitech mouse"
+        self._device_layout = get_device_layout("mx_master")
         self._battery_level = -1
         self._debug_lines = []
         self._debug_events_enabled = bool(
@@ -94,6 +97,9 @@ class Backend(QObject):
                 engine.set_gesture_event_callback(self._onEngineGestureEvent)
             if hasattr(engine, "set_debug_enabled"):
                 engine.set_debug_enabled(self.debugMode)
+        self._apply_device_layout(
+            getattr(engine, "connected_device", None) if engine else None
+        )
 
     # ── Properties ─────────────────────────────────────────────
 
@@ -193,6 +199,30 @@ class Backend(QObject):
     @Property(str, notify=deviceInfoChanged)
     def deviceDisplayName(self):
         return self._device_display_name
+
+    @Property(str, notify=deviceLayoutChanged)
+    def deviceImageAsset(self):
+        return self._device_layout.get("image_asset", "mouse.png")
+
+    @Property(int, notify=deviceLayoutChanged)
+    def deviceImageWidth(self):
+        return int(self._device_layout.get("image_width", 460))
+
+    @Property(int, notify=deviceLayoutChanged)
+    def deviceImageHeight(self):
+        return int(self._device_layout.get("image_height", 360))
+
+    @Property(bool, notify=deviceLayoutChanged)
+    def hasInteractiveDeviceLayout(self):
+        return bool(self._device_layout.get("interactive", True))
+
+    @Property(str, notify=deviceLayoutChanged)
+    def deviceLayoutNote(self):
+        return self._device_layout.get("note", "")
+
+    @Property(list, notify=deviceLayoutChanged)
+    def deviceHotspots(self):
+        return list(self._device_layout.get("hotspots", []))
 
     @Property(int, notify=batteryLevelChanged)
     def batteryLevel(self):
@@ -469,12 +499,9 @@ class Backend(QObject):
     def _handleConnectionChange(self, connected):
         """Runs on Qt main thread."""
         self._mouse_connected = connected
-        if connected and self._engine:
-            device = getattr(self._engine, "connected_device", None)
-            display_name = getattr(device, "display_name", "") or "Logitech mouse"
-            if display_name != self._device_display_name:
-                self._device_display_name = display_name
-                self.deviceInfoChanged.emit()
+        device = getattr(self._engine, "connected_device", None) if self._engine else None
+        if connected:
+            self._apply_device_layout(device)
         if not connected and self._battery_level != -1:
             self._battery_level = -1
             self.batteryLevelChanged.emit()
@@ -482,6 +509,18 @@ class Backend(QObject):
         self._append_debug_line(
             f"Mouse {'connected' if connected else 'disconnected'}"
         )
+
+    def _apply_device_layout(self, device):
+        display_name = getattr(device, "display_name", "") or "Logitech mouse"
+        if display_name != self._device_display_name:
+            self._device_display_name = display_name
+            self.deviceInfoChanged.emit()
+
+        layout_key = getattr(device, "ui_layout", None) or "mx_master"
+        layout = get_device_layout(layout_key)
+        if layout != self._device_layout:
+            self._device_layout = layout
+            self.deviceLayoutChanged.emit()
 
     @Slot(int)
     def _handleBatteryChange(self, level):

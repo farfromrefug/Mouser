@@ -181,6 +181,36 @@ Item {
         return "Tap: " + gestureTapActionLabel + " | Swipes configured"
     }
 
+    function hotspotSublabel(hotspot) {
+        if (!hotspot)
+            return ""
+        if (hotspot.summaryType === "gesture")
+            return gestureSummary()
+        if (hotspot.summaryType === "hscroll")
+            return "L: " + hscrollLeftActionLabel + " | R: " + hscrollRightActionLabel
+        return actionFor(hotspot.buttonKey)
+    }
+
+    function layoutHasButton(buttonKey) {
+        var hotspots = backend.deviceHotspots
+        for (var i = 0; i < hotspots.length; i++) {
+            if (hotspots[i].buttonKey === buttonKey)
+                return true
+        }
+        return false
+    }
+
+    Connections {
+        target: backend
+        function onDeviceLayoutChanged() {
+            if (selectedButton !== "" && !layoutHasButton(selectedButton)) {
+                selectedButton = ""
+                selectedButtonName = ""
+                selectedActionId = ""
+            }
+        }
+    }
+
     // ── Main two-column layout ────────────────────────────────
     Row {
         anchors.fill: parent
@@ -584,10 +614,10 @@ Item {
 
                         Image {
                             id: mouseImg
-                            source: "file:///" + applicationDirPath + "/images/mouse.png"
+                            source: "file:///" + applicationDirPath + "/images/" + backend.deviceImageAsset
                             fillMode: Image.PreserveAspectFit
-                            width: 460
-                            height: 360
+                            width: backend.deviceImageWidth
+                            height: backend.deviceImageHeight
                             anchors.centerIn: parent
                             smooth: true
                             mipmap: true
@@ -598,61 +628,53 @@ Item {
                             property real offY: (height - paintedHeight) / 2
                         }
 
-                        // Hotspot dots
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.35; normY: 0.4
-                            buttonKey: "middle"
-                            label: "Middle button"
-                            sublabel: actionFor("middle")
-                            labelSide: "right"
-                            labelOffX: 100; labelOffY: -160
+                        Repeater {
+                            model: backend.deviceHotspots
+
+                            delegate: HotspotDot {
+                                anchors.fill: mouseImageArea
+                                imgItem: mouseImg
+                                normX: modelData.normX
+                                normY: modelData.normY
+                                buttonKey: modelData.buttonKey
+                                isHScroll: modelData.isHScroll === true
+                                label: modelData.label || modelData.buttonKey
+                                sublabel: hotspotSublabel(modelData)
+                                labelSide: modelData.labelSide || "right"
+                                labelOffX: modelData.labelOffX === undefined ? 120 : modelData.labelOffX
+                                labelOffY: modelData.labelOffY === undefined ? -30 : modelData.labelOffY
+                            }
                         }
 
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.7; normY: 0.63
-                            buttonKey: "gesture"
-                            label: "Gesture button"
-                            sublabel: gestureSummary()
-                            labelSide: "left"
-                            labelOffX: -200; labelOffY: 60
-                        }
+                        Rectangle {
+                            visible: !backend.hasInteractiveDeviceLayout
+                            width: 420
+                            height: fallbackCol.implicitHeight + 32
+                            radius: 16
+                            color: theme.bgCard
+                            border.width: 1
+                            border.color: theme.border
+                            anchors.centerIn: parent
 
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.6; normY: 0.48
-                            buttonKey: "xbutton2"
-                            label: "Forward button"
-                            sublabel: actionFor("xbutton2")
-                            labelSide: "left"
-                            labelOffX: -300; labelOffY: 0
-                        }
+                            Column {
+                                id: fallbackCol
+                                anchors.fill: parent
+                                anchors.margins: 16
+                                spacing: 10
 
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.65; normY: 0.4
-                            buttonKey: "xbutton1"
-                            label: "Back button"
-                            sublabel: actionFor("xbutton1")
-                            labelSide: "right"
-                            labelOffX: 200; labelOffY: 50
-                        }
+                                Text {
+                                    text: "Interactive layout coming later"
+                                    font { family: uiState.fontFamily; pixelSize: 15; bold: true }
+                                    color: theme.textPrimary
+                                }
 
-                        HotspotDot {
-                            anchors.fill: mouseImageArea
-                            imgItem: mouseImg
-                            normX: 0.6; normY: 0.375
-                            buttonKey: "hscroll_left"
-                            isHScroll: true
-                            label: "Horizontal scroll"
-                            sublabel: "L: " + hscrollLeftActionLabel + " | R: " + hscrollRightActionLabel
-                            labelSide: "right"
-                            labelOffX: 200; labelOffY: -50
+                                Text {
+                                    text: backend.deviceLayoutNote
+                                    wrapMode: Text.WordWrap
+                                    font { family: uiState.fontFamily; pixelSize: 12 }
+                                    color: theme.textSecondary
+                                }
+                            }
                         }
                     }
 

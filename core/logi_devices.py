@@ -58,8 +58,8 @@ class ConnectedDeviceInfo:
     product_name: str | None = None
     transport: str | None = None
     source: str | None = None
-    ui_layout: str = "mx_master"
-    image_asset: str = "mouse.png"
+    ui_layout: str = "generic_mouse"
+    image_asset: str = "icons/mouse-simple.svg"
     supported_buttons: tuple[str, ...] = DEFAULT_BUTTON_LAYOUT
     gesture_cids: tuple[int, ...] = DEFAULT_GESTURE_CIDS
     dpi_min: int = 200
@@ -74,18 +74,21 @@ KNOWN_LOGI_DEVICES = (
         display_name="MX Master 3S",
         product_ids=(0xB034,),
         aliases=("Logitech MX Master 3S", "MX Master 3S for Mac"),
+        ui_layout="mx_master",
     ),
     LogiDeviceSpec(
         key="mx_master_3",
         display_name="MX Master 3",
         product_ids=(0xB023,),
         aliases=("Wireless Mouse MX Master 3", "MX Master 3 for Mac", "MX Master 3 Mac"),
+        ui_layout="mx_master",
     ),
     LogiDeviceSpec(
         key="mx_master_2s",
         display_name="MX Master 2S",
         product_ids=(0xB019,),
         aliases=("Wireless Mouse MX Master 2S",),
+        ui_layout="mx_master",
         dpi_max=4000,
     ),
     LogiDeviceSpec(
@@ -93,6 +96,7 @@ KNOWN_LOGI_DEVICES = (
         display_name="MX Master",
         product_ids=(0xB012,),
         aliases=("Wireless Mouse MX Master",),
+        ui_layout="mx_master",
         dpi_max=4000,
     ),
     LogiDeviceSpec(
@@ -100,6 +104,7 @@ KNOWN_LOGI_DEVICES = (
         display_name="MX Vertical",
         product_ids=(0xB020,),
         aliases=("MX Vertical Wireless Mouse", "MX Vertical Advanced Ergonomic Mouse"),
+        ui_layout="mx_vertical",
         dpi_max=4000,
     ),
     LogiDeviceSpec(
@@ -107,6 +112,7 @@ KNOWN_LOGI_DEVICES = (
         display_name="MX Anywhere 3S",
         product_ids=(0xB037,),
         aliases=("MX Anywhere 3S for Mac",),
+        ui_layout="mx_anywhere",
         dpi_max=8000,
     ),
     LogiDeviceSpec(
@@ -114,6 +120,7 @@ KNOWN_LOGI_DEVICES = (
         display_name="MX Anywhere 3",
         product_ids=(0xB025,),
         aliases=("MX Anywhere 3 for Mac",),
+        ui_layout="mx_anywhere",
         dpi_max=4000,
     ),
     LogiDeviceSpec(
@@ -121,6 +128,7 @@ KNOWN_LOGI_DEVICES = (
         display_name="MX Anywhere 2S",
         product_ids=(0xB01A,),
         aliases=("Wireless Mobile Mouse MX Anywhere 2S",),
+        ui_layout="mx_anywhere",
         dpi_max=4000,
     ),
 )
@@ -180,5 +188,7 @@ def build_connected_device_info(
         product_name=product_name or display_name,
         transport=transport,
         source=source,
+        ui_layout="generic_mouse",
+        image_asset="icons/mouse-simple.svg",
         gesture_cids=tuple(gesture_cids or DEFAULT_GESTURE_CIDS),
     )

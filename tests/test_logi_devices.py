@@ -34,6 +34,7 @@ class LogiDeviceRegistryTests(unittest.TestCase):
         self.assertEqual(info.product_id, 0xB023)
         self.assertEqual(info.transport, "Bluetooth Low Energy")
         self.assertEqual(info.gesture_cids, DEFAULT_GESTURE_CIDS)
+        self.assertEqual(info.ui_layout, "mx_master")
 
     def test_build_connected_device_info_falls_back_to_runtime_name(self):
         info = build_connected_device_info(
@@ -45,6 +46,7 @@ class LogiDeviceRegistryTests(unittest.TestCase):
         self.assertEqual(info.display_name, "Mystery Logitech Mouse")
         self.assertEqual(info.key, "mystery_logitech_mouse")
         self.assertEqual(info.gesture_cids, (0x00F1,))
+        self.assertEqual(info.ui_layout, "generic_mouse")
 
 
 if __name__ == "__main__":
