@@ -807,10 +807,9 @@ elif sys.platform == "darwin":
         # Check if it's a mouse button action
         if "mouse_button" in action:
             simulate_mouse_click(action["mouse_button"])
+        elif _execute_mac_action(action_id):
             return
-        if _execute_mac_action(action_id):
-            return
-        if action.get("mac_fn") is not None:
+        elif action.get("mac_fn") is not None:
             _send_media_key(action["mac_fn"])
         elif action["keys"]:
             send_key_combo(action["keys"])
