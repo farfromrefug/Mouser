@@ -122,6 +122,12 @@ if sys.platform == "win32":
 
     MOUSEEVENTF_WHEEL  = 0x0800
     MOUSEEVENTF_HWHEEL = 0x01000
+    MOUSEEVENTF_MIDDLEDOWN = 0x0020
+    MOUSEEVENTF_MIDDLEUP = 0x0040
+    MOUSEEVENTF_XDOWN = 0x0080
+    MOUSEEVENTF_XUP = 0x0100
+    XBUTTON1 = 0x0001
+    XBUTTON2 = 0x0002
 
     def inject_scroll(flags, delta):
         inp = INPUT()
@@ -130,6 +136,49 @@ if sys.platform == "win32":
         inp.union.mi.dwFlags = flags
         arr = (INPUT * 1)(inp)
         SendInput(1, arr, sizeof(INPUT))
+
+    def simulate_mouse_click(button_type):
+        """Simulate a mouse button click (down + up)."""
+        if button_type == "middle":
+            # Middle button click
+            inp_down = INPUT()
+            inp_down.type = INPUT_MOUSE
+            inp_down.union.mi.dwFlags = MOUSEEVENTF_MIDDLEDOWN
+            
+            inp_up = INPUT()
+            inp_up.type = INPUT_MOUSE
+            inp_up.union.mi.dwFlags = MOUSEEVENTF_MIDDLEUP
+            
+            arr = (INPUT * 2)(inp_down, inp_up)
+            SendInput(2, arr, sizeof(INPUT))
+        elif button_type == "xbutton1":
+            # Back button (XButton1) click
+            inp_down = INPUT()
+            inp_down.type = INPUT_MOUSE
+            inp_down.union.mi.mouseData = XBUTTON1
+            inp_down.union.mi.dwFlags = MOUSEEVENTF_XDOWN
+            
+            inp_up = INPUT()
+            inp_up.type = INPUT_MOUSE
+            inp_up.union.mi.mouseData = XBUTTON1
+            inp_up.union.mi.dwFlags = MOUSEEVENTF_XUP
+            
+            arr = (INPUT * 2)(inp_down, inp_up)
+            SendInput(2, arr, sizeof(INPUT))
+        elif button_type == "xbutton2":
+            # Forward button (XButton2) click
+            inp_down = INPUT()
+            inp_down.type = INPUT_MOUSE
+            inp_down.union.mi.mouseData = XBUTTON2
+            inp_down.union.mi.dwFlags = MOUSEEVENTF_XDOWN
+            
+            inp_up = INPUT()
+            inp_up.type = INPUT_MOUSE
+            inp_up.union.mi.mouseData = XBUTTON2
+            inp_up.union.mi.dwFlags = MOUSEEVENTF_XUP
+            
+            arr = (INPUT * 2)(inp_down, inp_up)
+            SendInput(2, arr, sizeof(INPUT))
 
     def _make_key_input(vk, flags=0):
         inp = INPUT()
@@ -271,6 +320,24 @@ if sys.platform == "win32":
             "keys": [VK_MEDIA_PREV_TRACK],
             "category": "Media",
         },
+        "middle_click": {
+            "label": "Middle Click",
+            "keys": [],
+            "category": "Mouse",
+            "mouse_button": "middle",
+        },
+        "xbutton1_click": {
+            "label": "Back Button Click",
+            "keys": [],
+            "category": "Mouse",
+            "mouse_button": "xbutton1",
+        },
+        "xbutton2_click": {
+            "label": "Forward Button Click",
+            "keys": [],
+            "category": "Mouse",
+            "mouse_button": "xbutton2",
+        },
         "none": {
             "label": "Do Nothing (Pass-through)",
             "keys": [],
@@ -280,9 +347,13 @@ if sys.platform == "win32":
 
     def execute_action(action_id):
         action = ACTIONS.get(action_id)
-        if not action or not action["keys"]:
+        if not action:
             return
-        send_key_combo(action["keys"])
+        # Check if it's a mouse button action
+        if "mouse_button" in action:
+            simulate_mouse_click(action["mouse_button"])
+        elif action["keys"]:
+            send_key_combo(action["keys"])
 
 
 # ==================================================================
@@ -353,6 +424,54 @@ elif sys.platform == "darwin":
             event = Quartz.CGEventCreateScrollWheelEvent(None, 0, 2, 0, delta)
         if event:
             Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
+
+    def simulate_mouse_click(button_type):
+        """Simulate a mouse button click (down + up) on macOS."""
+        if not _QUARTZ_OK:
+            return
+        
+        # Map button types to CGMouseButton and CGEventType
+        button_map = {
+            "middle": (Quartz.kCGMouseButtonCenter, 
+                      Quartz.kCGEventOtherMouseDown, 
+                      Quartz.kCGEventOtherMouseUp),
+            "xbutton1": (3,  # XButton1 (Back button)
+                        Quartz.kCGEventOtherMouseDown,
+                        Quartz.kCGEventOtherMouseUp),
+            "xbutton2": (4,  # XButton2 (Forward button)
+                        Quartz.kCGEventOtherMouseDown,
+                        Quartz.kCGEventOtherMouseUp),
+        }
+        
+        if button_type not in button_map:
+            return
+        
+        button, event_down_type, event_up_type = button_map[button_type]
+        
+        # Get current mouse location efficiently
+        try:
+            import AppKit
+            ns_point = AppKit.NSEvent.mouseLocation()
+            # Convert NSPoint (origin bottom-left) to CGPoint (origin top-left)
+            screen_height = AppKit.NSScreen.mainScreen().frame().size.height
+            mouse_loc = (ns_point.x, screen_height - ns_point.y)
+        except Exception:
+            # Fallback: use (0, 0) if NSEvent is not available
+            mouse_loc = (0, 0)
+        
+        # Create mouse down event
+        event_down = Quartz.CGEventCreateMouseEvent(
+            None, event_down_type, mouse_loc, button
+        )
+        
+        # Create mouse up event  
+        event_up = Quartz.CGEventCreateMouseEvent(
+            None, event_up_type, mouse_loc, button
+        )
+        
+        if event_down and event_up:
+            Quartz.CGEventPost(Quartz.kCGHIDEventTap, event_down)
+            Quartz.CGEventPost(Quartz.kCGHIDEventTap, event_up)
 
     # Modifier flag bits for CGEvent
     _MOD_FLAGS = {
@@ -662,6 +781,24 @@ elif sys.platform == "darwin":
             "mac_fn": _NX_PREV,
             "category": "Media",
         },
+        "middle_click": {
+            "label": "Middle Click",
+            "keys": [],
+            "category": "Mouse",
+            "mouse_button": "middle",
+        },
+        "xbutton1_click": {
+            "label": "Back Button Click",
+            "keys": [],
+            "category": "Mouse",
+            "mouse_button": "xbutton1",
+        },
+        "xbutton2_click": {
+            "label": "Forward Button Click",
+            "keys": [],
+            "category": "Mouse",
+            "mouse_button": "xbutton2",
+        },
         "none": {
             "label": "Do Nothing (Pass-through)",
             "keys": [],
@@ -673,9 +810,12 @@ elif sys.platform == "darwin":
         action = ACTIONS.get(action_id)
         if not action:
             return
-        if _execute_mac_action(action_id):
+        # Check if it's a mouse button action
+        if "mouse_button" in action:
+            simulate_mouse_click(action["mouse_button"])
+        elif _execute_mac_action(action_id):
             return
-        if action.get("mac_fn") is not None:
+        elif action.get("mac_fn") is not None:
             _send_media_key(action["mac_fn"])
         elif action["keys"]:
             send_key_combo(action["keys"])
@@ -692,6 +832,7 @@ else:
     def inject_scroll(flags, delta): pass
     def send_key_combo(keys, hold_ms=50): pass
     def send_key_press(vk): pass
+    def simulate_mouse_click(button_type): pass
     def execute_action(action_id): pass
 
     ACTIONS = {

@@ -16,8 +16,9 @@ No telemetry. No cloud. No Logitech account required.
 
 - **macOS support** — full macOS compatibility using CGEventTap for mouse hooking, Quartz CGEvent for key simulation, and NSWorkspace for app detection. See [macOS Setup Guide](readme_mac_osx.md) for details.
 - **Remap supported programmable controls** — MX Master-family layouts expose middle click, gesture button, back, forward, and horizontal scroll actions
+- **Mouse button remapping** — map any button to simulate other mouse button clicks (e.g., swap middle and gesture buttons)
 - **Per-application profiles** — automatically switch button mappings when you switch apps (e.g., different bindings for Chrome vs. VS Code)
-- **22 built-in actions** across navigation, browser, editing, and media categories
+- **25 built-in actions** across navigation, browser, editing, media, and mouse categories
 - **DPI / pointer speed control** — slider from 200–8000 DPI with quick presets, synced to the device via HID++
 - **Scroll direction inversion** — independent toggles for vertical and horizontal scroll
 - **Device-aware HID++ gesture support** — discovers `REPROG_CONTROLS_V4`, ranks gesture candidates per device, and diverts the best control it can find
@@ -66,6 +67,7 @@ _The UI is now device-aware. MX Master-family mice get the interactive diagram; 
 | **Browser** | Back, Forward, Close Tab (Ctrl+W), New Tab (Ctrl+T) |
 | **Editing** | Copy, Paste, Cut, Undo, Select All, Save, Find |
 | **Media** | Volume Up, Volume Down, Volume Mute, Play/Pause, Next Track, Previous Track |
+| **Mouse** | Middle Click, Back Button Click, Forward Button Click |
 | **Other** | Do Nothing (pass-through) |
 
 ---
