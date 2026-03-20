@@ -1267,6 +1267,50 @@ elif sys.platform == "darwin":
                 self._finish_gesture_tracking()
                 return
 
+        def _is_trackpad_event(self, cg_event, event_type):
+            """
+            Detect if an event originates from a trackpad rather than an external mouse.
+            Returns True if the event should be ignored (trackpad), False if it should be processed (mouse).
+            """
+            try:
+                # For scroll events, check momentum phase - this is the most reliable indicator
+                if event_type == Quartz.kCGEventScrollWheel:
+                    try:
+                        # Trackpads generate momentum scrolling with non-zero momentum phase
+                        # This is the most reliable indicator as external mice don't produce momentum
+                        momentum_phase = Quartz.CGEventGetIntegerValueField(
+                            cg_event, Quartz.kCGScrollWheelEventMomentumPhase
+                        )
+                        if momentum_phase != 0:
+                            return True
+                    except Exception as e:
+                        if self.debug_mode:
+                            print(f"[MouseHook] Failed to check momentum phase: {e}")
+                
+                # For other event types (mouse moves, clicks, drags), check the event subtype
+                # to identify if it's from a built-in trackpad device
+                try:
+                    # Check the event subtype which can indicate the device type
+                    subtype = Quartz.CGEventGetIntegerValueField(
+                        cg_event, Quartz.kCGMouseEventSubtype
+                    )
+                    # Subtype 0 = default mouse, 1 = tablet point, 2 = tablet proximity, 3 = touch
+                    # Trackpad clicks often have subtype indicating touch/tablet behavior
+                    if subtype in (1, 2, 3):
+                        return True
+                except Exception as e:
+                    if self.debug_mode:
+                        print(f"[MouseHook] Failed to check event subtype: {e}")
+                
+                return False
+            except Exception as e:
+                # If we can't determine, assume it's an external mouse to avoid blocking
+                # legitimate mouse events. This is safer because the purpose is to ignore
+                # trackpad events, not to block external mice when detection fails.
+                if self.debug_mode:
+                    print(f"[MouseHook] Error checking trackpad event: {e}")
+                return False
+
         def _dispatch_worker(self):
             """Background thread: drains the event queue so tap callback returns fast."""
             while self._running:
@@ -1282,6 +1326,15 @@ elif sys.platform == "darwin":
                 if not self._first_event_logged:
                     self._first_event_logged = True
                     print("[MouseHook] CGEventTap: first event received", flush=True)
+
+                # Ignore trackpad events - only process external mouse events
+                if self._is_trackpad_event(cg_event, event_type):
+                    if self.debug_mode and self._debug_callback:
+                        try:
+                            self._debug_callback(f"Ignoring trackpad event type={int(event_type)}")
+                        except Exception:
+                            pass
+                    return cg_event  # Pass through unchanged
 
                 mouse_event = None
                 should_block = False
