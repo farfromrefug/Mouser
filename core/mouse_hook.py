@@ -1277,28 +1277,17 @@ elif sys.platform == "darwin":
                 if event_type == Quartz.kCGEventScrollWheel:
                     try:
                         # Trackpads generate momentum scrolling with non-zero momentum phase
+                        # This is the most reliable indicator as external mice don't produce momentum
                         momentum_phase = Quartz.CGEventGetIntegerValueField(
                             cg_event, Quartz.kCGScrollWheelEventMomentumPhase
                         )
                         if momentum_phase != 0:
                             return True
-                        
-                        # Also check scroll phase - trackpads have distinct phase patterns
-                        scroll_phase = Quartz.CGEventGetIntegerValueField(
-                            cg_event, Quartz.kCGScrollWheelEventScrollPhase
-                        )
-                        # Phase values: 0=none, 1=began, 2=changed, 4=ended, 8=cancelled, 128=maybegin
-                        # External mice don't typically have phase information (will be 0)
-                        # Trackpads will have non-zero phases during active scrolling
-                        if scroll_phase != 0:
-                            return True
                     except Exception:
                         pass
                 
-                # For other event types (mouse moves, clicks, drags), check if the event
-                # has subtype indicating it's from a built-in device
-                # Trackpad events typically come from CGEventSourceStateID = 1 (combined)
-                # External mice typically come from CGEventSourceStateID = 0 (HID)
+                # For other event types (mouse moves, clicks, drags), check the event subtype
+                # to identify if it's from a built-in trackpad device
                 try:
                     # Check the event subtype which can indicate the device type
                     subtype = Quartz.CGEventGetIntegerValueField(
@@ -1313,7 +1302,9 @@ elif sys.platform == "darwin":
                 
                 return False
             except Exception as e:
-                # If we can't determine, assume it's a mouse (safer default)
+                # If we can't determine, assume it's an external mouse to avoid blocking
+                # legitimate mouse events. This is safer because the purpose is to ignore
+                # trackpad events, not to block external mice when detection fails.
                 if self.debug_mode:
                     print(f"[MouseHook] Error checking trackpad event: {e}")
                 return False
