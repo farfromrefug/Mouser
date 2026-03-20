@@ -448,10 +448,16 @@ elif sys.platform == "darwin":
         
         button, event_down_type, event_up_type = button_map[button_type]
         
-        # Get current mouse location
-        mouse_loc = Quartz.CGEventGetLocation(
-            Quartz.CGEventCreate(None)
-        )
+        # Get current mouse location efficiently
+        try:
+            import AppKit
+            ns_point = AppKit.NSEvent.mouseLocation()
+            # Convert NSPoint (origin bottom-left) to CGPoint (origin top-left)
+            screen_height = AppKit.NSScreen.mainScreen().frame().size.height
+            mouse_loc = (ns_point.x, screen_height - ns_point.y)
+        except Exception:
+            # Fallback: use (0, 0) if NSEvent is not available
+            mouse_loc = (0, 0)
         
         # Create mouse down event
         event_down = Quartz.CGEventCreateMouseEvent(
