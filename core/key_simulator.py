@@ -326,12 +326,6 @@ if sys.platform == "win32":
             "category": "Mouse",
             "mouse_button": "middle",
         },
-        "gesture_click": {
-            "label": "Gesture Click",
-            "keys": [],
-            "category": "Mouse",
-            "mouse_button": "gesture",
-        },
         "xbutton1_click": {
             "label": "Back Button Click",
             "keys": [],
@@ -786,12 +780,6 @@ elif sys.platform == "darwin":
             "keys": [],
             "category": "Mouse",
             "mouse_button": "middle",
-        },
-        "gesture_click": {
-            "label": "Gesture Click",
-            "keys": [],
-            "category": "Mouse",
-            "mouse_button": "gesture",
         },
         "xbutton1_click": {
             "label": "Back Button Click",
