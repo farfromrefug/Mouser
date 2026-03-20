@@ -31,7 +31,7 @@ os.environ["QT_QUICK_CONTROLS_STYLE"] = "Material"
 os.environ["QT_QUICK_CONTROLS_MATERIAL_ACCENT"] = "#00d4aa"
 
 _t1 = _time.perf_counter()
-from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QFileIconProvider
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QFileIconProvider, QMessageBox
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtCore import QObject, Property, QCoreApplication, QRectF, Qt, QUrl, Signal, QFileInfo
 from PySide6.QtQml import QQmlApplicationEngine
@@ -80,7 +80,20 @@ def _parse_cli_args(argv):
 
 
 def _app_icon() -> QIcon:
-    """Load the app icon from the pre-cropped .ico file."""
+    """Load the app icon with multiple resolutions for crisp display."""
+    if sys.platform == "darwin":
+        # macOS: use the square PNG and add multiple sizes for Retina
+        png = os.path.join(ROOT, "images", "logo_icon.png")
+        icon = QIcon()
+        source = QPixmap(png)
+        if not source.isNull():
+            for size in (16, 32, 64, 128, 256):
+                icon.addPixmap(
+                    source.scaled(size, size,
+                                  Qt.AspectRatioMode.KeepAspectRatio,
+                                  Qt.TransformationMode.SmoothTransformation))
+        return icon
+    # Windows / Linux: use the .ico
     ico = os.path.join(ROOT, "images", "logo.ico")
     return QIcon(ico)
 
@@ -235,6 +248,46 @@ class SystemIconProvider(QQuickImageProvider):
         return pixmap
 
 
+def _check_accessibility() -> bool:
+    """On macOS, check if Accessibility permission is granted.
+
+    Uses AXIsProcessTrustedWithOptions to trigger the native macOS prompt
+    that asks the user to grant Accessibility access.  Returns True if
+    already trusted, False otherwise.
+    """
+    if sys.platform != "darwin":
+        return True
+    try:
+        import ApplicationServices
+        import CoreFoundation
+        options = {CoreFoundation.kAXTrustedCheckOptionPrompt: True}
+        trusted = ApplicationServices.AXIsProcessTrustedWithOptions(options)
+        if not trusted:
+            print("[Mouser] Accessibility permission not granted")
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowTitle("Accessibility Permission Required")
+            msg.setText(
+                "Mouser needs Accessibility permission to intercept "
+                "mouse button events.\n\n"
+                "macOS should have opened the System Settings prompt.\n"
+                "Please grant permission, then restart Mouser."
+            )
+            msg.setInformativeText(
+                "System Settings → Privacy & Security → Accessibility"
+            )
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.exec()
+        return bool(trusted)
+    except ImportError:
+        print("[Mouser] pyobjc-framework-ApplicationServices not available — "
+              "skipping accessibility check")
+        return True
+    except Exception as e:
+        print(f"[Mouser] Accessibility check failed: {e}")
+        return True
+
+
 def main():
     _print_startup_times()
     _t5 = _time.perf_counter()
@@ -301,6 +354,9 @@ def main():
     print(f"[Startup] Engine create:    {(_t7-_t6)*1000:7.1f} ms")
     print(f"[Startup] QML load:         {(_t8-_t7)*1000:7.1f} ms")
     print(f"[Startup] TOTAL to window:  {(_t8-_t0)*1000:7.1f} ms")
+
+    # ── Accessibility check (macOS) ──────────────────────────────
+    _accessibility_granted = _check_accessibility()
 
     # ── Start engine AFTER window is ready (deferred) ──────────
     from PySide6.QtCore import QTimer

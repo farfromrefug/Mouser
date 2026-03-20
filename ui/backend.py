@@ -196,6 +196,17 @@ class Backend(QObject):
     def supportsGestureDirections(self):
         return sys.platform in ("darwin", "win32")
 
+    @Property(bool, constant=True)
+    def accessibilityGranted(self):
+        """Whether macOS Accessibility permission is granted (always True on other platforms)."""
+        if sys.platform != "darwin":
+            return True
+        try:
+            import ApplicationServices
+            return bool(ApplicationServices.AXIsProcessTrusted())
+        except Exception:
+            return True
+
     @Property(str, notify=activeProfileChanged)
     def activeProfile(self):
         return self._cfg.get("active_profile", "default")
