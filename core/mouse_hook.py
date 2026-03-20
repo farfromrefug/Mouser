@@ -1283,8 +1283,9 @@ elif sys.platform == "darwin":
                         )
                         if momentum_phase != 0:
                             return True
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        if self.debug_mode:
+                            print(f"[MouseHook] Failed to check momentum phase: {e}")
                 
                 # For other event types (mouse moves, clicks, drags), check the event subtype
                 # to identify if it's from a built-in trackpad device
@@ -1297,8 +1298,9 @@ elif sys.platform == "darwin":
                     # Trackpad clicks often have subtype indicating touch/tablet behavior
                     if subtype in (1, 2, 3):
                         return True
-                except Exception:
-                    pass
+                except Exception as e:
+                    if self.debug_mode:
+                        print(f"[MouseHook] Failed to check event subtype: {e}")
                 
                 return False
             except Exception as e:
