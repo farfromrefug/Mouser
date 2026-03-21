@@ -126,7 +126,16 @@ def _tray_icon() -> QIcon:
         return _app_icon()
 
     tray_svg = os.path.join(ROOT, "images", "icons", "mouse-simple.svg")
-    icon = QIcon(_render_svg_pixmap(tray_svg, QColor("#000000"), 18))
+    icon = QIcon()
+    # Provide both Normal (black, for light menu bar) and Selected (white,
+    # for dark menu bar) modes so macOS always picks the correct contrast.
+    for size in (18, 36):
+        icon.addPixmap(
+            _render_svg_pixmap(tray_svg, QColor("#000000"), size),
+            QIcon.Mode.Normal)
+        icon.addPixmap(
+            _render_svg_pixmap(tray_svg, QColor("#FFFFFF"), size),
+            QIcon.Mode.Selected)
     icon.setIsMask(True)
     return icon
 
