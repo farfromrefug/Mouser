@@ -29,7 +29,6 @@ class Engine:
         self.hook = MouseHook()
         self.cfg = load_config()
         self._enabled = True
-        self._hscroll_accum = 0
         self._hscroll_state = {
             MouseEvent.HSCROLL_LEFT: {"accum": 0.0, "last_fire_at": 0.0},
             MouseEvent.HSCROLL_RIGHT: {"accum": 0.0, "last_fire_at": 0.0},
@@ -123,20 +122,8 @@ class Engine:
                 event.event_type,
                 {"accum": 0.0, "last_fire_at": 0.0},
             )
-            raw_value = event.raw_data
-            if isinstance(raw_value, (int, float)):
-                step = abs(float(raw_value))
-                # Treat large wheel deltas as a single logical step while
-                # preserving sub-step deltas from macOS event tap scrolling.
-                if step >= 1.0:
-                    step = 1.0
-            else:
-                step = 1.0
-
-            threshold = max(
-                0.1,
-                float(self.cfg.get("settings", {}).get("hscroll_threshold", 1)),
-            )
+            step = self._hscroll_step(event.raw_data)
+            threshold = self._hscroll_threshold()
             now = getattr(event, "timestamp", None) or time.time()
 
             if now - state["last_fire_at"] < HSCROLL_ACTION_COOLDOWN_S:
@@ -155,6 +142,20 @@ class Engine:
             )
             execute_action(action_id)
         return handler
+
+    def _hscroll_step(self, raw_value):
+        if not isinstance(raw_value, (int, float)):
+            return 1.0
+
+        # Treat large wheel deltas as a single logical step while preserving
+        # sub-step deltas from macOS event tap scrolling.
+        return min(abs(float(raw_value)), 1.0)
+
+    def _hscroll_threshold(self):
+        return max(
+            0.1,
+            float(self.cfg.get("settings", {}).get("hscroll_threshold", 1)),
+        )
 
     # ------------------------------------------------------------------
     # Per-app auto-switching

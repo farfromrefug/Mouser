@@ -115,7 +115,7 @@ class Backend(QObject):
         )
 
     def _sync_autostart_state(self):
-        settings = self._cfg.setdefault("settings", {})
+        settings = self._settings()
         if not self._autostart_supported:
             settings["start_at_login"] = False
             return
@@ -124,6 +124,20 @@ class Backend(QObject):
         if settings.get("start_at_login") != enabled:
             settings["start_at_login"] = enabled
             save_config(self._cfg)
+
+    def _settings(self):
+        return self._cfg.setdefault("settings", {})
+
+    def _write_launch_at_login(self, enabled, *, start_hidden=None):
+        if enabled:
+            launch_hidden = (
+                self.startMinimized if start_hidden is None else bool(start_hidden)
+            )
+            autostart.enable_launch_at_login(
+                start_hidden=launch_hidden
+            )
+            return
+        autostart.disable_launch_at_login()
 
     # ── Properties ─────────────────────────────────────────────
 
@@ -389,7 +403,7 @@ class Backend(QObject):
     @Slot(bool)
     def setStartMinimized(self, value):
         enabled = bool(value)
-        settings = self._cfg.setdefault("settings", {})
+        settings = self._settings()
         if settings.get("start_minimized", True) == enabled:
             return
 
@@ -401,7 +415,7 @@ class Backend(QObject):
 
         if self._autostart_supported and self.startAtLogin:
             try:
-                autostart.enable_launch_at_login(start_hidden=enabled)
+                self._write_launch_at_login(True, start_hidden=enabled)
             except Exception as exc:
                 status_message = f"Updated setting, but login item refresh failed: {exc}"
 
@@ -417,19 +431,14 @@ class Backend(QObject):
             return
 
         try:
-            if enabled:
-                autostart.enable_launch_at_login(
-                    start_hidden=self.startMinimized
-                )
-            else:
-                autostart.disable_launch_at_login()
+            self._write_launch_at_login(enabled)
         except Exception as exc:
             self._sync_autostart_state()
             self.settingsChanged.emit()
             self.statusMessage.emit(f"Failed to update login item: {exc}")
             return
 
-        self._cfg.setdefault("settings", {})["start_at_login"] = enabled
+        self._settings()["start_at_login"] = enabled
         save_config(self._cfg)
         self.settingsChanged.emit()
         self.statusMessage.emit(
