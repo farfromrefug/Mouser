@@ -78,6 +78,12 @@ class Engine:
             timeout_ms=settings.get("gesture_timeout_ms", 3000),
             cooldown_ms=settings.get("gesture_cooldown_ms", 500),
         )
+        # Divert mode shift CID only when mapped to an action
+        self.hook.divert_mode_shift = any(
+            pdata.get("mappings", {}).get("mode_shift", "none") != "none"
+            for pdata in self.cfg.get("profiles", {}).values()
+        )
+
         self._emit_mapping_snapshot("Hook mappings refreshed", mappings)
 
         for btn_key, action_id in mappings.items():

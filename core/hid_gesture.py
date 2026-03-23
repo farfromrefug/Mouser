@@ -568,12 +568,16 @@ class HidGestureListener:
     """Background thread: diverts the gesture button and listens via HID++."""
 
     def __init__(self, on_down=None, on_up=None, on_move=None,
-                 on_connect=None, on_disconnect=None):
+                 on_connect=None, on_disconnect=None, extra_diverts=None):
         self._on_down       = on_down
         self._on_up         = on_up
         self._on_move       = on_move
         self._on_connect    = on_connect
         self._on_disconnect = on_disconnect
+        self._extra_diverts = {
+            cid: {**info, "held": False}
+            for cid, info in (extra_diverts or {}).items()
+        }
         self._dev       = None          # hid.device()
         self._thread    = None
         self._running   = False
@@ -885,10 +889,30 @@ class HidGestureListener:
         self._gesture_cid = DEFAULT_GESTURE_CID
         return False
 
+    def _divert_extras(self):
+        """Divert additional CIDs (e.g. mode shift) without raw XY."""
+        if self._feat_idx is None:
+            return
+        for cid, info in self._extra_diverts.items():
+            resp = self._set_cid_reporting(cid, 0x03)
+            ok = resp is not None
+            print(f"[HidGesture] Extra divert {_format_cid(cid)}: "
+                  f"{'OK' if ok else 'FAILED'}")
+
     def _undivert(self):
         """Restore default button behaviour (best-effort)."""
         if self._feat_idx is None or self._dev is None:
             return
+        # Undivert extra CIDs
+        for cid in self._extra_diverts:
+            hi = (cid >> 8) & 0xFF
+            lo = cid & 0xFF
+            try:
+                self._tx(LONG_ID, self._feat_idx, 3,
+                         [hi, lo, 0x02, 0x00, 0x00])
+            except Exception:
+                pass
+        # Undivert gesture CID
         hi = (self._gesture_cid >> 8) & 0xFF
         lo = self._gesture_cid & 0xFF
         flags = 0x22 if self._rawxy_enabled else 0x02
@@ -1085,6 +1109,28 @@ class HidGestureListener:
                 except Exception as e:
                     print(f"[HidGesture] up callback error: {e}")
 
+        # Check extra diverted CIDs (e.g. mode shift)
+        for cid, info in self._extra_diverts.items():
+            btn_now = cid in cids
+            if btn_now and not info["held"]:
+                info["held"] = True
+                print(f"[HidGesture] Extra {_format_cid(cid)} DOWN")
+                cb = info.get("on_down")
+                if cb:
+                    try:
+                        cb()
+                    except Exception as e:
+                        print(f"[HidGesture] extra down callback error: {e}")
+            elif not btn_now and info["held"]:
+                info["held"] = False
+                print(f"[HidGesture] Extra {_format_cid(cid)} UP")
+                cb = info.get("on_up")
+                if cb:
+                    try:
+                        cb()
+                    except Exception as e:
+                        print(f"[HidGesture] extra up callback error: {e}")
+
     # ── connect / main loop ───────────────────────────────────────
 
     def _try_connect(self):
@@ -1203,6 +1249,7 @@ class HidGestureListener:
                             self._battery_feature_id = FEAT_BATTERY_STATUS
                             print(f"[HidGesture] Found BATTERY_STATUS @0x{batt_fi:02X}")
                     if self._divert():
+                        self._divert_extras()
                         self._connected_device_info = build_connected_device_info(
                             product_id=pid,
                             product_name=product,

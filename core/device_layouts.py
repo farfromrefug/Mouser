@@ -71,6 +71,16 @@ MX_MASTER_LAYOUT = {
             "labelOffX": 200,
             "labelOffY": -50,
         },
+        {
+            "buttonKey": "mode_shift",
+            "label": "Mode shift button",
+            "summaryType": "mapping",
+            "normX": 0.43,
+            "normY": 0.25,
+            "labelSide": "left",
+            "labelOffX": -200,
+            "labelOffY": -80,
+        },
     ],
 }
 
