@@ -182,6 +182,7 @@ if sys.platform == "win32":
         # Press
         inp_down = INPUT()
         inp_down.type = INPUT_MOUSE
+        # Ensure mouseData fits in 32-bit unsigned integer for Windows API
         inp_down.union.mi.mouseData = mouse_data & 0xFFFFFFFF
         inp_down.union.mi.dwFlags = down_flag
         # Release
@@ -505,7 +506,9 @@ elif sys.platform == "darwin":
     # Mouse button event types for CGEvent
     kCGEventOtherMouseDown = 25
     kCGEventOtherMouseUp = 26
-    kCGMouseButtonCenter = 2  # Middle button
+    kCGMouseButtonCenter = 2   # Middle button
+    kCGMouseButtonBack = 3     # Back/side button 1
+    kCGMouseButtonForward = 4  # Forward/side button 2
 
     # Not used by inject_scroll on macOS — stubs for import compatibility
     MOUSEEVENTF_WHEEL  = 0x0800
@@ -527,10 +530,19 @@ elif sys.platform == "darwin":
         if not _QUARTZ_OK:
             return
         try:
-            # Get current mouse location
-            current_pos = Quartz.CGEventGetLocation(
-                Quartz.CGEventCreate(None)
-            ) if hasattr(Quartz, 'CGEventCreate') else Quartz.CGPointMake(0, 0)
+            # Try to get current mouse location; if unavailable, use screen center
+            if hasattr(Quartz, 'CGEventCreate'):
+                mouse_event = Quartz.CGEventCreate(None)
+                if mouse_event:
+                    current_pos = Quartz.CGEventGetLocation(mouse_event)
+                else:
+                    # If CGEventCreate fails, fall back to a default location
+                    print("[KeySimulator] Warning: Could not get mouse position, using default")
+                    current_pos = Quartz.CGPointMake(100, 100)
+            else:
+                # CGEventCreate not available, fall back to a default location
+                print("[KeySimulator] Warning: CGEventCreate unavailable, using default mouse position")
+                current_pos = Quartz.CGPointMake(100, 100)
             
             # Create press event
             event_down = Quartz.CGEventCreateMouseEvent(
@@ -915,10 +927,10 @@ elif sys.platform == "darwin":
             inject_mouse_button(kCGEventOtherMouseDown, kCGEventOtherMouseUp, kCGMouseButtonCenter)
             return
         elif action_id == "simulate_xbutton1":
-            inject_mouse_button(kCGEventOtherMouseDown, kCGEventOtherMouseUp, 3)  # Button 3
+            inject_mouse_button(kCGEventOtherMouseDown, kCGEventOtherMouseUp, kCGMouseButtonBack)
             return
         elif action_id == "simulate_xbutton2":
-            inject_mouse_button(kCGEventOtherMouseDown, kCGEventOtherMouseUp, 4)  # Button 4
+            inject_mouse_button(kCGEventOtherMouseDown, kCGEventOtherMouseUp, kCGMouseButtonForward)
             return
         action = ACTIONS.get(action_id)
         if not action:
@@ -1060,7 +1072,16 @@ elif sys.platform == "linux":
             return None
 
     def inject_mouse_button(button_code):
-        """Simulate a mouse button click (press and release) on Linux."""
+        """
+        Simulate a mouse button click (press and release) on Linux.
+        
+        Note: This function has a different signature than the Windows/macOS versions
+        because Linux's evdev library uses a single button code instead of separate
+        down/up flags and button numbers.
+        
+        Args:
+            button_code: Linux button code (BTN_MIDDLE, BTN_SIDE, or BTN_EXTRA)
+        """
         mouse = _get_virtual_mouse()
         if not mouse:
             return
