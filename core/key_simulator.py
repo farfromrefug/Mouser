@@ -164,6 +164,10 @@ if sys.platform == "win32":
 
     MOUSEEVENTF_WHEEL  = 0x0800
     MOUSEEVENTF_HWHEEL = 0x01000
+    MOUSEEVENTF_MIDDLEDOWN = 0x0020
+    MOUSEEVENTF_MIDDLEUP = 0x0040
+    MOUSEEVENTF_XDOWN = 0x0080
+    MOUSEEVENTF_XUP = 0x0100
 
     def inject_scroll(flags, delta):
         inp = INPUT()
@@ -172,6 +176,22 @@ if sys.platform == "win32":
         inp.union.mi.dwFlags = flags
         arr = (INPUT * 1)(inp)
         SendInput(1, arr, sizeof(INPUT))
+
+    def inject_mouse_button(down_flag, up_flag, mouse_data=0):
+        """Simulate a mouse button click (press and release)."""
+        # Press
+        inp_down = INPUT()
+        inp_down.type = INPUT_MOUSE
+        inp_down.union.mi.mouseData = mouse_data & 0xFFFFFFFF
+        inp_down.union.mi.dwFlags = down_flag
+        # Release
+        inp_up = INPUT()
+        inp_up.type = INPUT_MOUSE
+        inp_up.union.mi.mouseData = mouse_data & 0xFFFFFFFF
+        inp_up.union.mi.dwFlags = up_flag
+        # Send both events
+        arr = (INPUT * 2)(inp_down, inp_up)
+        SendInput(2, arr, sizeof(INPUT))
 
     # VKs that require the KEYEVENTF_EXTENDEDKEY flag in SendInput
     _EXTENDED_VKS = frozenset({
@@ -360,6 +380,21 @@ if sys.platform == "win32":
             "keys": [VK_MEDIA_PREV_TRACK],
             "category": "Media",
         },
+        "simulate_middle": {
+            "label": "Simulate Middle Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
+        "simulate_xbutton1": {
+            "label": "Simulate Back Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
+        "simulate_xbutton2": {
+            "label": "Simulate Forward Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
         "none": {
             "label": "Do Nothing (Pass-through)",
             "keys": [],
@@ -392,6 +427,16 @@ if sys.platform == "win32":
             keys = _parse_custom_combo(action_id, _KEY_NAME_TO_CODE)
             if keys:
                 send_key_combo(keys)
+            return
+        # Handle button simulation actions
+        if action_id == "simulate_middle":
+            inject_mouse_button(MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP)
+            return
+        elif action_id == "simulate_xbutton1":
+            inject_mouse_button(MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1)
+            return
+        elif action_id == "simulate_xbutton2":
+            inject_mouse_button(MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON2)
             return
         action = ACTIONS.get(action_id)
         if not action or not action["keys"]:
@@ -457,6 +502,11 @@ elif sys.platform == "darwin":
     kVK_F11 = 0x67
     kVK_F12 = 0x6F
 
+    # Mouse button event types for CGEvent
+    kCGEventOtherMouseDown = 25
+    kCGEventOtherMouseUp = 26
+    kCGMouseButtonCenter = 2  # Middle button
+
     # Not used by inject_scroll on macOS — stubs for import compatibility
     MOUSEEVENTF_WHEEL  = 0x0800
     MOUSEEVENTF_HWHEEL = 0x01000
@@ -471,6 +521,31 @@ elif sys.platform == "darwin":
             event = Quartz.CGEventCreateScrollWheelEvent(None, 0, 2, 0, delta)
         if event:
             Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
+
+    def inject_mouse_button(button_type_down, button_type_up, button_number):
+        """Simulate a mouse button click (press and release) on macOS."""
+        if not _QUARTZ_OK:
+            return
+        try:
+            # Get current mouse location
+            current_pos = Quartz.CGEventGetLocation(
+                Quartz.CGEventCreate(None)
+            ) if hasattr(Quartz, 'CGEventCreate') else Quartz.CGPointMake(0, 0)
+            
+            # Create press event
+            event_down = Quartz.CGEventCreateMouseEvent(
+                None, button_type_down, current_pos, button_number
+            )
+            # Create release event
+            event_up = Quartz.CGEventCreateMouseEvent(
+                None, button_type_up, current_pos, button_number
+            )
+            
+            if event_down and event_up:
+                Quartz.CGEventPost(Quartz.kCGHIDEventTap, event_down)
+                Quartz.CGEventPost(Quartz.kCGHIDEventTap, event_up)
+        except Exception as e:
+            print(f"[KeySimulator] mouse button injection error: {e}")
 
     # Modifier flag bits for CGEvent
     _MOD_FLAGS = {
@@ -790,6 +865,21 @@ elif sys.platform == "darwin":
             "mac_fn": _NX_PREV,
             "category": "Media",
         },
+        "simulate_middle": {
+            "label": "Simulate Middle Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
+        "simulate_xbutton1": {
+            "label": "Simulate Back Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
+        "simulate_xbutton2": {
+            "label": "Simulate Forward Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
         "none": {
             "label": "Do Nothing (Pass-through)",
             "keys": [],
@@ -819,6 +909,16 @@ elif sys.platform == "darwin":
             keys = _parse_custom_combo(action_id, _KEY_NAME_TO_CODE)
             if keys:
                 send_key_combo(keys)
+            return
+        # Handle button simulation actions
+        if action_id == "simulate_middle":
+            inject_mouse_button(kCGEventOtherMouseDown, kCGEventOtherMouseUp, kCGMouseButtonCenter)
+            return
+        elif action_id == "simulate_xbutton1":
+            inject_mouse_button(kCGEventOtherMouseDown, kCGEventOtherMouseUp, 3)  # Button 3
+            return
+        elif action_id == "simulate_xbutton2":
+            inject_mouse_button(kCGEventOtherMouseDown, kCGEventOtherMouseUp, 4)  # Button 4
             return
         action = ACTIONS.get(action_id)
         if not action:
@@ -898,12 +998,19 @@ elif sys.platform == "linux":
     EV_REL = 2
     REL_WHEEL = 8
     REL_HWHEEL = 6
+    
+    # Mouse button codes for Linux
+    BTN_MIDDLE = 0x112
+    BTN_SIDE = 0x113    # XButton1 (Back)
+    BTN_EXTRA = 0x114   # XButton2 (Forward)
 
     MOUSEEVENTF_WHEEL  = 0x0800
     MOUSEEVENTF_HWHEEL = 0x01000
 
     _virtual_kbd = None
     _virtual_kbd_lock = threading.Lock()
+    _virtual_mouse = None
+    _virtual_mouse_lock = threading.Lock()
 
     def _get_virtual_kbd():
         global _virtual_kbd
@@ -927,6 +1034,40 @@ elif sys.platform == "linux":
             except Exception as e:
                 print(f"[KeySimulator] Failed to create virtual keyboard: {e}")
             return None
+
+    def _get_virtual_mouse():
+        """Get or create a virtual mouse device for injecting button events."""
+        global _virtual_mouse
+        if _virtual_mouse is not None:
+            return _virtual_mouse
+        with _virtual_mouse_lock:
+            if _virtual_mouse is not None:
+                return _virtual_mouse
+            try:
+                from evdev import ecodes, UInput
+                _virtual_mouse = UInput(
+                    {ecodes.EV_KEY: [BTN_MIDDLE, BTN_SIDE, BTN_EXTRA]},
+                    name="Mouser Virtual Mouse",
+                )
+                return _virtual_mouse
+            except ImportError:
+                print("[KeySimulator] python-evdev not installed — pip install evdev")
+            except PermissionError:
+                print("[KeySimulator] Permission denied for /dev/uinput — "
+                      "add user to 'input' group")
+            except Exception as e:
+                print(f"[KeySimulator] Failed to create virtual mouse: {e}")
+            return None
+
+    def inject_mouse_button(button_code):
+        """Simulate a mouse button click (press and release) on Linux."""
+        mouse = _get_virtual_mouse()
+        if not mouse:
+            return
+        mouse.write(EV_KEY, button_code, 1)  # Press
+        mouse.syn()
+        mouse.write(EV_KEY, button_code, 0)  # Release
+        mouse.syn()
 
     def send_key_combo(keys, hold_ms=50):
         kbd = _get_virtual_kbd()
@@ -1088,6 +1229,21 @@ elif sys.platform == "linux":
             "keys": [KEY_PREVIOUSSONG],
             "category": "Media",
         },
+        "simulate_middle": {
+            "label": "Simulate Middle Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
+        "simulate_xbutton1": {
+            "label": "Simulate Back Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
+        "simulate_xbutton2": {
+            "label": "Simulate Forward Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
         "none": {
             "label": "Do Nothing (Pass-through)",
             "keys": [],
@@ -1121,6 +1277,16 @@ elif sys.platform == "linux":
             if keys:
                 send_key_combo(keys)
             return
+        # Handle button simulation actions
+        if action_id == "simulate_middle":
+            inject_mouse_button(BTN_MIDDLE)
+            return
+        elif action_id == "simulate_xbutton1":
+            inject_mouse_button(BTN_SIDE)
+            return
+        elif action_id == "simulate_xbutton2":
+            inject_mouse_button(BTN_EXTRA)
+            return
         action = ACTIONS.get(action_id)
         if not action or not action["keys"]:
             return
@@ -1136,11 +1302,27 @@ else:
     MOUSEEVENTF_HWHEEL = 0x01000
 
     def inject_scroll(flags, delta): pass
+    def inject_mouse_button(*args): pass
     def send_key_combo(keys, hold_ms=50): pass
     def send_key_press(vk): pass
     def execute_action(action_id): pass
 
     ACTIONS = {
+        "simulate_middle": {
+            "label": "Simulate Middle Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
+        "simulate_xbutton1": {
+            "label": "Simulate Back Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
+        "simulate_xbutton2": {
+            "label": "Simulate Forward Button",
+            "keys": [],
+            "category": "Button Simulation",
+        },
         "none": {
             "label": "Do Nothing (Pass-through)",
             "keys": [],
