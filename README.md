@@ -71,7 +71,17 @@ Action labels adapt by platform. For example, Windows exposes `Win+D` and `Task 
 | **Browser** | Back, Forward, Close Tab (Ctrl+W), New Tab (Ctrl+T) |
 | **Editing** | Copy, Paste, Cut, Undo, Select All, Save, Find |
 | **Media** | Volume Up, Volume Down, Volume Mute, Play/Pause, Next Track, Previous Track |
+| **Button Simulation** | Simulate Middle Button, Simulate Back Button, Simulate Forward Button |
 | **Other** | Do Nothing (pass-through) |
+
+### Button Simulation
+
+The **Button Simulation** category allows you to remap one mouse button to trigger another mouse button. For example:
+- Map the middle button to simulate the back button
+- Map the back button to simulate the middle click
+- Swap forward and back buttons
+
+This is useful when you want to remap buttons to other physical button presses rather than keyboard shortcuts.
 
 ---
 
