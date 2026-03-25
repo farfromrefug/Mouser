@@ -15,6 +15,27 @@ class KeySimulatorActionTests(unittest.TestCase):
         self.assertEqual(key_simulator.ACTIONS["space_left"]["label"], "Previous Desktop")
         self.assertEqual(key_simulator.ACTIONS["space_right"]["label"], "Next Desktop")
 
+    def test_button_simulation_actions_exist(self):
+        """Test that button simulation actions are available."""
+        self.assertIn("simulate_middle", key_simulator.ACTIONS)
+        self.assertIn("simulate_xbutton1", key_simulator.ACTIONS)
+        self.assertIn("simulate_xbutton2", key_simulator.ACTIONS)
+        
+        # Check category
+        self.assertEqual(key_simulator.ACTIONS["simulate_middle"]["category"], "Button Simulation")
+        self.assertEqual(key_simulator.ACTIONS["simulate_xbutton1"]["category"], "Button Simulation")
+        self.assertEqual(key_simulator.ACTIONS["simulate_xbutton2"]["category"], "Button Simulation")
+        
+        # Check labels
+        self.assertEqual(key_simulator.ACTIONS["simulate_middle"]["label"], "Simulate Middle Button")
+        self.assertEqual(key_simulator.ACTIONS["simulate_xbutton1"]["label"], "Simulate Back Button")
+        self.assertEqual(key_simulator.ACTIONS["simulate_xbutton2"]["label"], "Simulate Forward Button")
+        
+        # Check that they have empty keys (since they use inject_mouse_button)
+        self.assertEqual(key_simulator.ACTIONS["simulate_middle"]["keys"], [])
+        self.assertEqual(key_simulator.ACTIONS["simulate_xbutton1"]["keys"], [])
+        self.assertEqual(key_simulator.ACTIONS["simulate_xbutton2"]["keys"], [])
+
 
 class LinuxDesktopShortcutTests(unittest.TestCase):
     def _reload_for_linux(self, desktop: str):
