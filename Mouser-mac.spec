@@ -29,6 +29,7 @@ a = Analysis(
     ],
     hiddenimports=[
         "hid",
+        "ui.locale_manager",
         "PySide6.QtQuick",
         "PySide6.QtQuickControls2",
         "PySide6.QtQml",

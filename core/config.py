@@ -101,6 +101,7 @@ DEFAULT_CONFIG = {
         "appearance_mode": "system",
         "debug_mode": False,
         "device_layout_overrides": {},
+        "language": "en",
     },
 }
 
@@ -299,6 +300,7 @@ def _migrate(cfg):
     cfg["settings"].setdefault("appearance_mode", "system")
     cfg["settings"].setdefault("debug_mode", False)
     cfg["settings"].setdefault("device_layout_overrides", {})
+    cfg["settings"].setdefault("language", "en")
 
     # Always migrate old wmplayer.exe → Microsoft.Media.Player.exe in profile apps
     for pdata in cfg.get("profiles", {}).values():

@@ -28,6 +28,7 @@ a = Analysis(
         # conditional / lazy imports PyInstaller may miss
         "hid",
         "ctypes.wintypes",
+        "ui.locale_manager",
         # PySide6 QML runtime
         "PySide6.QtQuick",
         "PySide6.QtQuickControls2",
