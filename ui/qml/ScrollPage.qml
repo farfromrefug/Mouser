@@ -78,6 +78,7 @@ Item {
 
             Rectangle {
                 id: dpiCard
+                visible: backend.hidFeaturesReady
                 width: parent.width - 72
                 anchors.horizontalCenter: parent.horizontalCenter
                 height: dpiContent.implicitHeight + 40
@@ -461,13 +462,14 @@ Item {
                     }
 
                     Text {
-                        text: "Start Mouser automatically after login, and optionally keep the settings window hidden."
+                        text: "Start Mouser at login on Windows and macOS, and choose whether the settings window opens on launch or Mouser stays in the system tray."
                         font {
                             family: uiState.fontFamily
                             pixelSize: 12
                         }
                         color: scrollPage.theme.textSecondary
                         wrapMode: Text.WordWrap
+                        width: parent.width
                     }
 
                     Rectangle {
@@ -475,6 +477,7 @@ Item {
                         height: 52
                         radius: 10
                         color: scrollPage.theme.bgSubtle
+                        visible: backend.supportsStartAtLogin
 
                         RowLayout {
                             anchors {
@@ -497,7 +500,7 @@ Item {
                                 id: startAtLoginSwitch
                                 checked: backend.startAtLogin
                                 Material.accent: scrollPage.theme.accent
-                                Accessible.name: "Start Mouser at login"
+                                Accessible.name: "Start at login"
                                 onToggled: backend.setStartAtLogin(checked)
                             }
                         }
@@ -508,7 +511,6 @@ Item {
                         height: 52
                         radius: 10
                         color: scrollPage.theme.bgSubtle
-                        opacity: startAtLoginSwitch.checked ? 1 : 0.55
 
                         RowLayout {
                             anchors {
@@ -518,7 +520,7 @@ Item {
                             }
 
                             Text {
-                                text: "Launch hidden after login"
+                                text: "Start minimized"
                                 font {
                                     family: uiState.fontFamily
                                     pixelSize: 13
@@ -530,9 +532,8 @@ Item {
                             Switch {
                                 id: startMinimizedSwitch
                                 checked: backend.startMinimized
-                                enabled: startAtLoginSwitch.checked
                                 Material.accent: scrollPage.theme.accent
-                                Accessible.name: "Launch hidden after login"
+                                Accessible.name: "Start minimized"
                                 onToggled: backend.setStartMinimized(checked)
                             }
                         }
