@@ -391,7 +391,7 @@ Item {
                             }
 
                             Text {
-                                text: "High sensitivity scroll"
+                                text: "High Sensitivity Scroll"
                                 font {
                                     family: uiState.fontFamily
                                     pixelSize: 13
@@ -404,7 +404,7 @@ Item {
                                 id: hiResScrollSwitch
                                 checked: backend.hiResScroll
                                 Material.accent: scrollPage.theme.accent
-                                Accessible.name: "High sensitivity scroll"
+                                Accessible.name: "High Sensitivity Scroll"
                                 onToggled: backend.setHiResScroll(checked)
                             }
                         }

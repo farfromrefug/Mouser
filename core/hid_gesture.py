@@ -1112,7 +1112,7 @@ class HidGestureListener:
             return
         # Prefer HIRES_WHEEL (0x2121): read-modify-write the mode byte
         if self._hires_wheel_idx is not None:
-            resp = self._request(self._hires_wheel_idx, 0x01, [])  # getMode fnid=0x10→func 1
+            resp = self._request(self._hires_wheel_idx, 0x01, [])  # getMode (function 0x10)
             if resp:
                 _, _, _, _, p = resp
                 current = p[0] if p else 0x00
@@ -1120,7 +1120,7 @@ class HidGestureListener:
                     new_mode = current | self._HIRES_WHEEL_RES_BIT
                 else:
                     new_mode = current & ~self._HIRES_WHEEL_RES_BIT
-                wr = self._request(self._hires_wheel_idx, 0x02, [new_mode & 0xFF])  # setMode fnid=0x20→func 2
+                wr = self._request(self._hires_wheel_idx, 0x02, [new_mode & 0xFF])  # setMode (function 0x20)
                 if wr:
                     print(f"[HidGesture] Hi-Res Scroll (HIRES_WHEEL) set to {'on' if enabled else 'off'}")
                     self._hi_res_scroll_result = True
@@ -1133,7 +1133,7 @@ class HidGestureListener:
         # Fall back to HI_RES_SCROLLING (0x2120): write a single mode byte
         if self._hi_res_scroll_idx is not None:
             mode_byte = 0x01 if enabled else 0x00
-            resp = self._request(self._hi_res_scroll_idx, 0x01, [mode_byte])  # setMode fnid=0x10→func 1
+            resp = self._request(self._hi_res_scroll_idx, 0x01, [mode_byte])  # setMode (function 0x10)
             if resp:
                 print(f"[HidGesture] Hi-Res Scroll (HI_RES_SCROLLING) set to {'on' if enabled else 'off'}")
                 self._hi_res_scroll_result = True
