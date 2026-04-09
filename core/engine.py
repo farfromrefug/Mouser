@@ -478,8 +478,8 @@ class Engine:
                 replay_ok = False
                 
         saved_hrs = self.cfg.get("settings", {}).get("hi_res_scroll")
-                if saved_hrs and hg.hi_res_scroll_supported:
-                    hg.set_hi_res_scroll(saved_hrs)
+        if saved_hrs and hg.hi_res_scroll_supported:
+            hg.set_hi_res_scroll(saved_hrs)
 
         saved_ss = self.cfg.get("settings", {}).get("smart_shift_mode")
         if saved_ss and getattr(hg, "smart_shift_supported", False):
@@ -759,8 +759,8 @@ class Engine:
                     pass
                   
         saved_hrs = self.cfg.get("settings", {}).get("hi_res_scroll")
-                if saved_hrs and hg.hi_res_scroll_supported:
-                    hg.set_hi_res_scroll(saved_hrs)
+        if saved_hrs and hg.hi_res_scroll_supported:
+            hg.set_hi_res_scroll(saved_hrs)
 
         if hg.smart_shift_supported:
             ok = hg.set_smart_shift(ss_mode, ss_enabled, ss_threshold)
