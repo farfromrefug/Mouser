@@ -7,10 +7,14 @@ import "Theme.js" as Theme
 Item {
     id: scrollPage
     readonly property var theme: Theme.palette(uiState.darkMode)
+
+    // Reactive shortcut — all s["key"] bindings update when lm.languageChanged fires
+    property var s: lm.strings
+
     readonly property var appearanceOptions: [
-        { label: "System", value: "system" },
-        { label: "Light", value: "light" },
-        { label: "Dark", value: "dark" }
+        { label: s["scroll.system"], value: "system" },
+        { label: s["scroll.light"],  value: "light"  },
+        { label: s["scroll.dark"],   value: "dark"   }
     ]
     readonly property var allDpiPresets: [400, 800, 1000, 1600, 2400, 4000, 6000, 8000]
     readonly property var dpiPresets: {
@@ -47,7 +51,7 @@ Item {
                     spacing: 4
 
                     Text {
-                        text: "Point & Scroll"
+                        text: s["scroll.title"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 24
@@ -57,7 +61,7 @@ Item {
                     }
 
                     Text {
-                        text: "Adjust pointer speed, appearance, and scroll behaviour"
+                        text: s["scroll.subtitle"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 13
@@ -76,8 +80,10 @@ Item {
 
             Item { width: 1; height: 24 }
 
+            // ── DPI / Pointer Speed ───────────────────────────────
             Rectangle {
                 id: dpiCard
+                visible: backend.hidFeaturesReady
                 width: parent.width - 72
                 anchors.horizontalCenter: parent.horizontalCenter
                 height: dpiContent.implicitHeight + 40
@@ -97,7 +103,7 @@ Item {
                     spacing: 12
 
                     Text {
-                        text: "Pointer Speed (DPI)"
+                        text: s["scroll.pointer_speed"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 16
@@ -108,9 +114,12 @@ Item {
 
                     Text {
                         text: backend.deviceDpiMin === 200 && backend.deviceDpiMax === 8000
-                              ? "Adjust the tracking speed of the sensor. Higher = faster pointer."
-                              : "Adjust the tracking speed of the sensor. This device supports "
-                                + backend.deviceDpiMin + " to " + backend.deviceDpiMax + " DPI."
+                              ? s["scroll.pointer_speed_desc"]
+                              : s["scroll.pointer_speed_desc_range_prefix"]
+                                + backend.deviceDpiMin
+                                + s["scroll.pointer_speed_desc_range_to"]
+                                + backend.deviceDpiMax
+                                + s["scroll.pointer_speed_desc_range_suffix"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 12
@@ -139,7 +148,7 @@ Item {
                             stepSize: 50
                             value: backend.dpi
                             Material.accent: scrollPage.theme.accent
-                            Accessible.name: "Pointer speed"
+                            Accessible.name: s["scroll.pointer_speed"]
 
                             onMoved: {
                                 dpiLabel.text = Math.round(value) + " DPI"
@@ -187,7 +196,7 @@ Item {
                         spacing: 8
 
                         Text {
-                            text: "Presets:"
+                            text: s["scroll.presets"]
                             font {
                                 family: uiState.fontFamily
                                 pixelSize: 11
@@ -211,7 +220,7 @@ Item {
                                 border.color: scrollPage.theme.border
 
                                 Accessible.role: Accessible.Button
-                                Accessible.name: "Set DPI to " + modelData
+                                Accessible.name: modelData + " DPI"
 
                                 Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -245,10 +254,11 @@ Item {
                 }
             }
 
-            Item { width: 1; height: 16; visible: backend.smartShiftSupported }
+            Item { width: 1; height: 16; visible: backend.smartShiftSupported && backend.deviceHasSmartShift }
 
+            // ── Scroll Wheel Mode ─────────────────────────────────
             Rectangle {
-                visible: backend.smartShiftSupported
+                visible: backend.smartShiftSupported && backend.deviceHasSmartShift
                 width: parent.width - 72
                 anchors.horizontalCenter: parent.horizontalCenter
                 height: smartShiftContent.implicitHeight + 40
@@ -265,10 +275,213 @@ Item {
                         top: parent.top
                         margins: 20
                     }
+                    spacing: 16
+
+                    // ── SmartShift header row with toggle ───────────────
+                    RowLayout {
+                        width: parent.width
+
+                        Column {
+                            spacing: 4
+                            Layout.fillWidth: true
+
+                            Text {
+                                text: s["scroll.smart_shift"]
+                                font {
+                                    family: uiState.fontFamily
+                                    pixelSize: 16
+                                    bold: true
+                                }
+                                color: scrollPage.theme.textPrimary
+                            }
+
+                            Text {
+                                text: s["scroll.smart_shift_desc"]
+                                font {
+                                    family: uiState.fontFamily
+                                    pixelSize: 12
+                                }
+                                color: scrollPage.theme.textSecondary
+                                wrapMode: Text.WordWrap
+                                width: parent.width
+                            }
+                        }
+
+                        Switch {
+                            id: smartShiftToggle
+                            checked: backend.smartShiftEnabled
+                            Material.accent: scrollPage.theme.accent
+                            Accessible.name: "SmartShift"
+                            onToggled: backend.setSmartShiftEnabled(checked)
+                        }
+                    }
+
+                    // ── Sensitivity slider (visible when SmartShift ON) ─
+                    Column {
+                        visible: backend.smartShiftEnabled
+                        width: parent.width
+                        spacing: 8
+
+                        Text {
+                            text: s["scroll.sensitivity_value"]
+                            font {
+                                family: uiState.fontFamily
+                                pixelSize: 11
+                                bold: true
+                                letterSpacing: 0.8
+                            }
+                            color: scrollPage.theme.textDim
+                        }
+
+                        RowLayout {
+                            width: parent.width
+                            spacing: 8
+
+                            Text {
+                                text: "1"
+                                font { family: uiState.fontFamily; pixelSize: 11 }
+                                color: scrollPage.theme.textDim
+                            }
+
+                            Slider {
+                                id: smartShiftSlider
+                                Layout.fillWidth: true
+                                from: 1
+                                to: 50
+                                stepSize: 1
+                                value: backend.smartShiftThreshold
+                                Material.accent: scrollPage.theme.accent
+                                Accessible.name: "SmartShift sensitivity"
+
+                                onMoved: {
+                                    smartShiftLabel.text = Math.round(value * 2) + "%"
+                                    smartShiftDebounce.restart()
+                                }
+                            }
+
+                            Text {
+                                text: "50"
+                                font { family: uiState.fontFamily; pixelSize: 11 }
+                                color: scrollPage.theme.textDim
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: 72
+                                Layout.preferredHeight: 36
+                                radius: 10
+                                color: scrollPage.theme.accentDim
+
+                                Text {
+                                    id: smartShiftLabel
+                                    anchors.centerIn: parent
+                                    text: Math.round(backend.smartShiftThreshold * 2) + "%"
+                                    font {
+                                        family: uiState.fontFamily
+                                        pixelSize: 14
+                                        bold: true
+                                    }
+                                    color: scrollPage.theme.accent
+                                }
+                            }
+                        }
+
+                        Timer {
+                            id: smartShiftDebounce
+                            interval: 400
+                            onTriggered: backend.setSmartShiftThreshold(Math.round(smartShiftSlider.value))
+                        }
+                    }
+
+                    // ── Scroll Mode (hidden when SmartShift ON) ─────────
+                    Column {
+                        visible: !backend.smartShiftEnabled
+                        width: parent.width
+                        spacing: 8
+
+                        Text {
+                            text: s["scroll.scroll_mode_section"]
+                            font {
+                                family: uiState.fontFamily
+                                pixelSize: 11
+                                bold: true
+                                letterSpacing: 0.8
+                            }
+                            color: scrollPage.theme.textDim
+                        }
+
+                        Row {
+                            width: parent.width
+                            spacing: 10
+
+                            Repeater {
+                                model: [
+                                    { value: "ratchet",  labelKey: "scroll.ratchet"  },
+                                    { value: "freespin", labelKey: "scroll.freespin" }
+                                ]
+
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    width: Math.max(96, ssText.implicitWidth + 28)
+                                    height: 38
+                                    radius: 10
+                                    color: backend.smartShiftMode === modelData.value
+                                           ? scrollPage.theme.accentDim
+                                           : scrollPage.theme.bgSubtle
+                                    border.width: backend.smartShiftMode === modelData.value ? 2 : 1
+                                    border.color: backend.smartShiftMode === modelData.value
+                                                  ? scrollPage.theme.accent
+                                                  : scrollPage.theme.border
+
+                                    Text {
+                                        id: ssText
+                                        anchors.centerIn: parent
+                                        text: s[modelData.labelKey] || modelData.labelKey
+                                        font {
+                                            family: uiState.fontFamily
+                                            pixelSize: 12
+                                            bold: backend.smartShiftMode === modelData.value
+                                        }
+                                        color: backend.smartShiftMode === modelData.value
+                                               ? scrollPage.theme.accent
+                                               : scrollPage.theme.textPrimary
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: backend.setSmartShift(modelData.value)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Item { width: 1; height: 16 }
+
+            // ── Appearance ────────────────────────────────────────
+            Rectangle {
+                width: parent.width - 72
+                anchors.horizontalCenter: parent.horizontalCenter
+                height: appearanceContent.implicitHeight + 40
+                radius: Theme.radius
+                color: scrollPage.theme.bgCard
+                border.width: 1
+                border.color: scrollPage.theme.border
+
+                Column {
+                    id: appearanceContent
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        top: parent.top
+                        margins: 20
+                    }
                     spacing: 12
 
                     Text {
-                        text: "Scroll Wheel Mode"
+                        text: s["scroll.appearance"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 16
@@ -278,7 +491,7 @@ Item {
                     }
 
                     Text {
-                        text: "Switch between tactile ratchet scrolling and smooth free-spin."
+                        text: s["scroll.appearance_desc"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 12
@@ -291,42 +504,48 @@ Item {
                         spacing: 10
 
                         Repeater {
-                            model: [
-                                { value: "ratchet", label: "Ratchet" },
-                                { value: "freespin", label: "Free Spin" }
-                            ]
+                            model: scrollPage.appearanceOptions
 
                             delegate: Rectangle {
                                 required property var modelData
-                                width: Math.max(96, ssText.implicitWidth + 28)
+                                width: Math.max(96, optionText.implicitWidth + 28)
                                 height: 38
                                 radius: 10
-                                color: backend.smartShiftMode === modelData.value
-                                       ? scrollPage.theme.accentDim
-                                       : scrollPage.theme.bgSubtle
-                                border.width: backend.smartShiftMode === modelData.value ? 2 : 1
-                                border.color: backend.smartShiftMode === modelData.value
+                                color: backend.appearanceMode === modelData.value
+                                       ? scrollPage.theme.accent
+                                       : optionMouse.containsMouse
+                                         ? scrollPage.theme.bgCardHover
+                                         : scrollPage.theme.bgSubtle
+                                border.width: 1
+                                border.color: backend.appearanceMode === modelData.value
                                               ? scrollPage.theme.accent
                                               : scrollPage.theme.border
 
+                                Accessible.role: Accessible.Button
+                                Accessible.name: modelData.label
+
+                                Behavior on color { ColorAnimation { duration: 120 } }
+
                                 Text {
-                                    id: ssText
+                                    id: optionText
                                     anchors.centerIn: parent
                                     text: modelData.label
                                     font {
                                         family: uiState.fontFamily
                                         pixelSize: 12
-                                        bold: backend.smartShiftMode === modelData.value
+                                        bold: backend.appearanceMode === modelData.value
                                     }
-                                    color: backend.smartShiftMode === modelData.value
-                                           ? scrollPage.theme.accent
+                                    color: backend.appearanceMode === modelData.value
+                                           ? scrollPage.theme.bgSidebar
                                            : scrollPage.theme.textPrimary
                                 }
 
                                 MouseArea {
+                                    id: optionMouse
                                     anchors.fill: parent
+                                    hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: backend.setSmartShift(modelData.value)
+                                    onClicked: backend.setAppearanceMode(modelData.value)
                                 }
                             }
                         }
@@ -414,17 +633,18 @@ Item {
 
             Item { width: 1; height: 16 }
 
+            // ── Language ──────────────────────────────────────────
             Rectangle {
                 width: parent.width - 72
                 anchors.horizontalCenter: parent.horizontalCenter
-                height: appearanceContent.implicitHeight + 40
+                height: languageContent.implicitHeight + 40
                 radius: Theme.radius
                 color: scrollPage.theme.bgCard
                 border.width: 1
                 border.color: scrollPage.theme.border
 
                 Column {
-                    id: appearanceContent
+                    id: languageContent
                     anchors {
                         left: parent.left
                         right: parent.right
@@ -434,7 +654,7 @@ Item {
                     spacing: 12
 
                     Text {
-                        text: "Appearance"
+                        text: s["scroll.language"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 16
@@ -444,7 +664,7 @@ Item {
                     }
 
                     Text {
-                        text: "Choose whether Mouser follows the system, stays light, or stays dark."
+                        text: s["scroll.language_desc"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 12
@@ -457,48 +677,45 @@ Item {
                         spacing: 10
 
                         Repeater {
-                            model: scrollPage.appearanceOptions
+                            model: lm.availableLanguages
 
                             delegate: Rectangle {
                                 required property var modelData
-                                width: Math.max(96, optionText.implicitWidth + 28)
+                                width: Math.max(108, langText.implicitWidth + 28)
                                 height: 38
                                 radius: 10
-                                color: backend.appearanceMode === modelData.value
+                                color: lm.language === modelData.code
                                        ? scrollPage.theme.accent
-                                       : optionMouse.containsMouse
+                                       : langMa.containsMouse
                                          ? scrollPage.theme.bgCardHover
                                          : scrollPage.theme.bgSubtle
                                 border.width: 1
-                                border.color: backend.appearanceMode === modelData.value
+                                border.color: lm.language === modelData.code
                                               ? scrollPage.theme.accent
                                               : scrollPage.theme.border
-
-                                Accessible.role: Accessible.Button
-                                Accessible.name: "Appearance " + modelData.label
 
                                 Behavior on color { ColorAnimation { duration: 120 } }
 
                                 Text {
-                                    id: optionText
+                                    id: langText
                                     anchors.centerIn: parent
-                                    text: modelData.label
+                                    text: modelData.name
                                     font {
                                         family: uiState.fontFamily
                                         pixelSize: 12
-                                        bold: backend.appearanceMode === modelData.value
+                                        bold: lm.language === modelData.code
                                     }
-                                    color: backend.appearanceMode === modelData.value
+                                    color: lm.language === modelData.code
                                            ? scrollPage.theme.bgSidebar
                                            : scrollPage.theme.textPrimary
                                 }
 
                                 MouseArea {
-                                    id: optionMouse
+                                    id: langMa
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: backend.setAppearanceMode(modelData.value)
+                                    onClicked: lm.setLanguage(modelData.code)
                                 }
                             }
                         }
@@ -508,6 +725,7 @@ Item {
 
             Item { width: 1; height: 16 }
 
+            // ── Startup ───────────────────────────────────────────
             Rectangle {
                 visible: backend.supportsStartAtLogin
                 width: parent.width - 72
@@ -529,7 +747,7 @@ Item {
                     spacing: 12
 
                     Text {
-                        text: "Startup"
+                        text: s["scroll.startup"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 16
@@ -539,13 +757,14 @@ Item {
                     }
 
                     Text {
-                        text: "Start Mouser automatically after login, and optionally keep the settings window hidden."
+                        text: s["scroll.startup_desc"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 12
                         }
                         color: scrollPage.theme.textSecondary
                         wrapMode: Text.WordWrap
+                        width: parent.width
                     }
 
                     Rectangle {
@@ -553,6 +772,7 @@ Item {
                         height: 52
                         radius: 10
                         color: scrollPage.theme.bgSubtle
+                        visible: backend.supportsStartAtLogin
 
                         RowLayout {
                             anchors {
@@ -562,7 +782,7 @@ Item {
                             }
 
                             Text {
-                                text: "Start at login"
+                                text: s["scroll.start_at_login"]
                                 font {
                                     family: uiState.fontFamily
                                     pixelSize: 13
@@ -575,7 +795,7 @@ Item {
                                 id: startAtLoginSwitch
                                 checked: backend.startAtLogin
                                 Material.accent: scrollPage.theme.accent
-                                Accessible.name: "Start Mouser at login"
+                                Accessible.name: s["scroll.start_at_login"]
                                 onToggled: backend.setStartAtLogin(checked)
                             }
                         }
@@ -586,7 +806,6 @@ Item {
                         height: 52
                         radius: 10
                         color: scrollPage.theme.bgSubtle
-                        opacity: startAtLoginSwitch.checked ? 1 : 0.55
 
                         RowLayout {
                             anchors {
@@ -596,7 +815,7 @@ Item {
                             }
 
                             Text {
-                                text: "Launch hidden after login"
+                                text: s["scroll.start_minimized"]
                                 font {
                                     family: uiState.fontFamily
                                     pixelSize: 13
@@ -608,9 +827,8 @@ Item {
                             Switch {
                                 id: startMinimizedSwitch
                                 checked: backend.startMinimized
-                                enabled: startAtLoginSwitch.checked
                                 Material.accent: scrollPage.theme.accent
-                                Accessible.name: "Launch hidden after login"
+                                Accessible.name: s["scroll.start_minimized"]
                                 onToggled: backend.setStartMinimized(checked)
                             }
                         }
@@ -623,6 +841,7 @@ Item {
                 height: backend.supportsStartAtLogin ? 16 : 0
             }
 
+            // ── Scroll Direction ──────────────────────────────────
             Rectangle {
                 width: parent.width - 72
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -643,7 +862,7 @@ Item {
                     spacing: 12
 
                     Text {
-                        text: "Scroll Direction"
+                        text: s["scroll.scroll_direction"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 16
@@ -653,7 +872,7 @@ Item {
                     }
 
                     Text {
-                        text: "Invert the scroll direction (natural scrolling)"
+                        text: s["scroll.scroll_direction_desc"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 12
@@ -675,7 +894,7 @@ Item {
                             }
 
                             Text {
-                                text: "Invert vertical scroll"
+                                text: s["scroll.invert_vertical"]
                                 font {
                                     family: uiState.fontFamily
                                     pixelSize: 13
@@ -688,7 +907,7 @@ Item {
                                 id: vscrollSwitch
                                 checked: backend.invertVScroll
                                 Material.accent: scrollPage.theme.accent
-                                Accessible.name: "Invert vertical scroll"
+                                Accessible.name: s["scroll.invert_vertical"]
                                 onToggled: backend.setInvertVScroll(checked)
                             }
                         }
@@ -708,7 +927,7 @@ Item {
                             }
 
                             Text {
-                                text: "Invert horizontal scroll"
+                                text: s["scroll.invert_horizontal"]
                                 font {
                                     family: uiState.fontFamily
                                     pixelSize: 13
@@ -721,7 +940,7 @@ Item {
                                 id: hscrollSwitch
                                 checked: backend.invertHScroll
                                 Material.accent: scrollPage.theme.accent
-                                Accessible.name: "Invert horizontal scroll"
+                                Accessible.name: s["scroll.invert_horizontal"]
                                 onToggled: backend.setInvertHScroll(checked)
                             }
                         }
@@ -731,6 +950,7 @@ Item {
 
             Item { width: 1; height: 16 }
 
+            // ── DPI note ──────────────────────────────────────────
             Rectangle {
                 width: parent.width - 72
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -758,7 +978,7 @@ Item {
 
                     Text {
                         width: parent.width - 28
-                        text: "DPI changes require HID++ communication with the device and will take effect after a short delay."
+                        text: s["scroll.dpi_note"]
                         font {
                             family: uiState.fontFamily
                             pixelSize: 12
