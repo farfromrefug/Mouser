@@ -359,8 +359,8 @@ class HidBoltReceiverTests(unittest.TestCase):
         # devIdx 0xFF (first tried) = Bluetooth
         self.assertEqual(listener.connected_device.transport, "Bluetooth")
 
-    def test_transport_label_logi_bolt_for_receiver_slot(self):
-        """devIdx 1-6 should produce 'Logi Bolt' transport."""
+    def test_transport_label_logi_bolt_for_bolt_receiver(self):
+        """devIdx 1-6 with Bolt PID 0xC548 should produce 'Logi Bolt'."""
         listener = hid_gesture.HidGestureListener()
         info = {
             "product_id": 0xC548,
@@ -371,14 +371,12 @@ class HidBoltReceiverTests(unittest.TestCase):
             "path": b"/dev/hidraw-test",
         }
         fake_dev = _FakeHidDevice()
-        # Simulate: 0xFF times out, slot 1 has the mouse
         call_count = [0]
 
         def fake_find_feature(feature_id):
             if feature_id != hid_gesture.FEAT_REPROG_V4:
                 return None
             call_count[0] += 1
-            # First call is devIdx=0xFF → not found, second is devIdx=1 → found
             return 0x09 if call_count[0] >= 2 else None
 
         with (
@@ -400,8 +398,49 @@ class HidBoltReceiverTests(unittest.TestCase):
         ):
             self.assertTrue(listener._try_connect())
 
-        # devIdx 1 = receiver slot = Logi Bolt
         self.assertEqual(listener.connected_device.transport, "Logi Bolt")
+
+    def test_transport_label_usb_receiver_for_non_bolt(self):
+        """devIdx 1-6 with non-Bolt PID (e.g. Unifying 0xC52B) should produce
+        'USB Receiver', not 'Logi Bolt'."""
+        listener = hid_gesture.HidGestureListener()
+        info = {
+            "product_id": 0xC52B,
+            "usage_page": 0xFF00,
+            "usage": 0x0001,
+            "source": "hidapi-enumerate",
+            "product_string": "USB Receiver",
+            "path": b"/dev/hidraw-test",
+        }
+        fake_dev = _FakeHidDevice()
+        call_count = [0]
+
+        def fake_find_feature(feature_id):
+            if feature_id != hid_gesture.FEAT_REPROG_V4:
+                return None
+            call_count[0] += 1
+            return 0x09 if call_count[0] >= 2 else None
+
+        with (
+            patch.object(listener, "_vendor_hid_infos", return_value=[info]),
+            patch.object(listener, "_find_feature", side_effect=fake_find_feature),
+            patch.object(listener, "_discover_reprog_controls", return_value=[]),
+            patch.object(listener, "_divert", return_value=True),
+            patch.object(listener, "_divert_extras"),
+            patch.object(hid_gesture, "HIDAPI_OK", True),
+            patch.object(hid_gesture, "_BACKEND_PREFERENCE", "hidapi"),
+            patch.object(hid_gesture, "_HID_API_STYLE", "hidapi"),
+            patch.object(
+                hid_gesture,
+                "_hid",
+                SimpleNamespace(device=lambda: fake_dev),
+                create=True,
+            ),
+            patch("builtins.print"),
+        ):
+            self.assertTrue(listener._try_connect())
+
+        self.assertEqual(listener.connected_device.transport, "USB Receiver")
 
 
 class HidReconnectInvariantTests(unittest.TestCase):

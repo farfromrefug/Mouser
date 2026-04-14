@@ -468,6 +468,9 @@ SHORT_LEN      = 7
 LONG_LEN       = 20
 
 BT_DEV_IDX     = 0xFF        # device-index for direct Bluetooth
+# Known Logi Bolt receiver PID.
+# Source: https://github.com/pwr-Solaar/Solaar/blob/master/lib/logitech_receiver/base_usb.py
+BOLT_RECEIVER_PID = 0xC548
 FEAT_IROOT     = 0x0000
 FEAT_REPROG_V4 = 0x1B04      # Reprogrammable Controls V4
 FEAT_ADJ_DPI   = 0x2201      # Adjustable DPI
@@ -1583,11 +1586,12 @@ class HidGestureListener:
                             print(f"[HidGesture] Found BATTERY_STATUS @0x{batt_fi:02X}")
                     if self._divert():
                         self._divert_extras()
-                        actual_transport = (
-                            "Bluetooth"
-                            if idx == BT_DEV_IDX
-                            else "Logi Bolt"
-                        )
+                        if idx == BT_DEV_IDX:
+                            actual_transport = "Bluetooth"
+                        elif pid == BOLT_RECEIVER_PID:
+                            actual_transport = "Logi Bolt"
+                        else:
+                            actual_transport = "USB Receiver"
                         self._connected_device_info = build_connected_device_info(
                             product_id=pid,
                             product_name=hidpp_name or product,
