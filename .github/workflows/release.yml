@@ -76,7 +76,7 @@ jobs:
         run: pyinstaller Mouser-linux.spec --noconfirm
 
       - name: Create archive
-        run: cd dist && zip -r ../Mouser-Linux.zip Mouser
+        run: cd dist && zip -r -y ../Mouser-Linux.zip Mouser
 
       - uses: actions/upload-artifact@v4
         with:
