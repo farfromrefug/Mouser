@@ -182,20 +182,20 @@ def _render_svg_pixmap(path: str, color: QColor, size: int) -> QPixmap:
 
 
 def _tray_icon() -> QIcon:
-    if sys.platform != "darwin":
-        return _app_icon()
 
     tray_svg = os.path.join(ROOT, "images", "icons", "mouse-simple.svg")
     icon = QIcon()
     # Provide both Normal (black, for light menu bar) and Selected (white,
     # for dark menu bar) modes so macOS always picks the correct contrast.
     for size in (18, 36):
+        normalColor = "#FFFFFF" if sys.platform == "linux"  else "#000000"
         icon.addPixmap(
-            _render_svg_pixmap(tray_svg, QColor("#000000"), size),
+            _render_svg_pixmap(tray_svg, QColor(normalColor), size),
             QIcon.Mode.Normal)
         icon.addPixmap(
             _render_svg_pixmap(tray_svg, QColor("#FFFFFF"), size),
             QIcon.Mode.Selected)
+            
     icon.setIsMask(True)
     return icon
 
@@ -556,7 +556,7 @@ def main():
 
     tray.setContextMenu(tray_menu)
     tray.activated.connect(lambda reason: (
-        show_main_window()
+        toggle_main_window()
     ) if reason in (
         QSystemTrayIcon.ActivationReason.Trigger,
         QSystemTrayIcon.ActivationReason.DoubleClick,
