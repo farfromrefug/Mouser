@@ -147,8 +147,6 @@ if sys.platform == "darwin":
 
 def _default_backend_preference(platform_name=None):
     platform_name = sys.platform if platform_name is None else platform_name
-    if platform_name == "darwin":
-        return "iokit"
     return "auto"
 
 
@@ -470,6 +468,9 @@ SHORT_LEN      = 7
 LONG_LEN       = 20
 
 BT_DEV_IDX     = 0xFF        # device-index for direct Bluetooth
+# Known Logi Bolt receiver PID.
+# Source: https://github.com/pwr-Solaar/Solaar/blob/master/lib/logitech_receiver/base_usb.py
+BOLT_RECEIVER_PID = 0xC548
 FEAT_IROOT     = 0x0000
 FEAT_REPROG_V4 = 0x1B04      # Reprogrammable Controls V4
 FEAT_ADJ_DPI   = 0x2201      # Adjustable DPI
@@ -1428,6 +1429,14 @@ class HidGestureListener:
         if not infos:
             return False
 
+        # Try direct devices (Bluetooth) before USB receivers, which
+        # require scanning multiple slots with slow timeouts.
+        def _direct_device_first(info):
+            name = (info.get("product_string") or "").lower()
+            return (1 if "receiver" in name else 0, name)
+
+        infos.sort(key=_direct_device_first)
+
         print(f"[HidGesture] Backend preference: {_BACKEND_PREFERENCE}")
         print(f"[HidGesture] Candidate HID interfaces: {len(infos)}")
         for info in infos:
@@ -1462,8 +1471,8 @@ class HidGestureListener:
             opened_up = int(up or 0)
             opened_usage = int(usage or 0)
             open_attempts = []
-            if _BACKEND_PREFERENCE in ("auto", "hidapi") and info.get("path"):
-                open_attempts.append(("hidapi", info))
+            # On macOS, prefer IOKit (non-exclusive access) over hidapi
+            # which may lock the device and freeze the cursor.
             if (
                 sys.platform == "darwin"
                 and _MAC_NATIVE_OK
@@ -1478,6 +1487,8 @@ class HidGestureListener:
                         "transport": "Bluetooth Low Energy",
                     }),
                 ])
+            if _BACKEND_PREFERENCE in ("auto", "hidapi") and info.get("path"):
+                open_attempts.append(("hidapi", info))
 
             for transport, open_info in open_attempts:
                 try:
@@ -1575,15 +1586,21 @@ class HidGestureListener:
                             print(f"[HidGesture] Found BATTERY_STATUS @0x{batt_fi:02X}")
                     if self._divert():
                         self._divert_extras()
+                        if idx == BT_DEV_IDX:
+                            actual_transport = "Bluetooth"
+                        elif pid == BOLT_RECEIVER_PID:
+                            actual_transport = "Logi Bolt"
+                        else:
+                            actual_transport = "USB Receiver"
                         self._connected_device_info = build_connected_device_info(
                             product_id=pid,
                             product_name=hidpp_name or product,
-                            transport=open_info.get("transport") or transport,
+                            transport=actual_transport,
                             source=source,
                             gesture_cids=self._gesture_candidates,
                         )
                         return True
-                    break        # right device but divert failed
+                    continue     # divert failed — try next receiver slot
             if not reprog_found:
                 print(
                     "[HidGesture] Opened candidate but REPROG_V4 was not found "

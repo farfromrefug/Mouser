@@ -83,6 +83,7 @@ class Backend(QObject):
         self._device_dpi_min = DEFAULT_DPI_MIN
         self._device_dpi_max = DEFAULT_DPI_MAX
         self._connected_device_source = ""
+        self._connected_device_transport = ""
         self._battery_level = -1
         self._hid_features_ready = False
         self._debug_lines = []
@@ -355,6 +356,10 @@ class Backend(QObject):
     @Property(str, notify=deviceInfoChanged)
     def connectedDeviceKey(self):
         return self._connected_device_key
+
+    @Property(str, notify=deviceInfoChanged)
+    def connectionType(self):
+        return self._connected_device_transport
 
     @Property(int, notify=deviceInfoChanged)
     def deviceDpiMin(self):
@@ -882,13 +887,20 @@ class Backend(QObject):
         if not isinstance(state, dict):
             return
         settings = self._cfg.setdefault("settings", {})
-        settings["smart_shift_mode"] = state.get("mode", "ratchet")
-        settings["smart_shift_enabled"] = state.get("enabled", False)
+        mode = state.get("mode", "ratchet")
+        enabled = bool(state.get("enabled", False))
+        settings["smart_shift_enabled"] = enabled
+        # Hardware reads cannot report the user's saved fixed-mode fallback while
+        # SmartShift auto-switching is enabled: the device only exposes ratchet +
+        # threshold in that state. Preserve the existing fallback mode unless the
+        # callback explicitly carries free-spin (the engine's saved-state replay).
+        if not enabled or mode == "freespin":
+            settings["smart_shift_mode"] = mode
         # Only accept the device-reported threshold when SmartShift is
         # enabled (device returns the real value 1-50).  When disabled the
         # device returns 0xFF which the read code maps to a hardcoded 25,
         # overwriting whatever the user chose in the UI.
-        if state.get("enabled", False):
+        if enabled:
             settings["smart_shift_threshold"] = state.get("threshold", 25)
         self.smartShiftChanged.emit()
 
@@ -1012,6 +1024,7 @@ class Backend(QObject):
         device_key = getattr(device, "key", "") or ""
         display_name = getattr(device, "display_name", "") or "Logitech mouse"
         source = getattr(device, "source", "") or ""
+        transport = getattr(device, "transport", "") or ""
         dpi_min = getattr(device, "dpi_min", DEFAULT_DPI_MIN) or DEFAULT_DPI_MIN
         dpi_max = getattr(device, "dpi_max", DEFAULT_DPI_MAX) or DEFAULT_DPI_MAX
         info_changed = False
@@ -1023,6 +1036,9 @@ class Backend(QObject):
             info_changed = True
         if source != self._connected_device_source:
             self._connected_device_source = source
+            info_changed = True
+        if transport != self._connected_device_transport:
+            self._connected_device_transport = transport
             info_changed = True
         if dpi_min != self._device_dpi_min:
             self._device_dpi_min = dpi_min

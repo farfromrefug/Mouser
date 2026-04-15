@@ -34,6 +34,7 @@ No telemetry. No cloud. No Logitech account required.
 - **Single instance guard** — launching a second copy brings the existing window to the front
 
 ### 🔌 Smart Connectivity
+- **Bluetooth and Logi Bolt** — works with both Bluetooth and Logi Bolt USB receivers; connection type shown in the UI
 - **Auto-reconnection** — detects power-off/on and restores full functionality without restarting
 - **Live connection status** — real-time "Connected" / "Not Connected" badge in the UI
 - **Device-aware UI** — interactive MX Master diagram with clickable hotspots; generic fallback for other models
@@ -105,7 +106,10 @@ Action labels adapt by platform. For example, Windows exposes `Win+D` and `Task 
     <img src="https://img.shields.io/github/downloads/TomBadash/Mouser/latest/Mouser-Windows.zip?style=for-the-badge&color=00d4aa&logo=windows&label=Windows&displayAssetName=false" alt="Windows Downloads" />
   </a>
   <a href="https://github.com/TomBadash/Mouser/releases/latest">
-    <img src="https://img.shields.io/github/downloads/TomBadash/Mouser/latest/Mouser-macOS.zip?style=for-the-badge&color=00d4aa&logo=apple&label=macOS&displayAssetName=false" alt="macOS Downloads" />
+    <img src="https://img.shields.io/github/downloads/TomBadash/Mouser/latest/Mouser-macOS.zip?style=for-the-badge&color=00d4aa&logo=apple&label=macOS%20Apple%20Silicon&displayAssetName=false" alt="macOS Apple Silicon Downloads" />
+  </a>
+  <a href="https://github.com/TomBadash/Mouser/releases/latest">
+    <img src="https://img.shields.io/github/downloads/TomBadash/Mouser/latest/Mouser-macOS-intel.zip?style=for-the-badge&color=00d4aa&logo=apple&label=macOS%20Intel&displayAssetName=false" alt="macOS Intel Downloads" />
   </a>
   <a href="https://github.com/TomBadash/Mouser/releases/latest">
     <img src="https://img.shields.io/github/downloads/TomBadash/Mouser/latest/Mouser-Linux.zip?style=for-the-badge&color=00d4aa&logo=linux&label=Linux&displayAssetName=false" alt="Linux Downloads" />
@@ -117,7 +121,7 @@ Action labels adapt by platform. For example, Windows exposes `Win+D` and `Task 
 ### Steps
 
 1. Go to the [**latest release page**](https://github.com/TomBadash/Mouser/releases/latest)
-2. Download the zip for your platform: **Mouser-Windows.zip**, **Mouser-macOS.zip**, or **Mouser-Linux.zip**
+2. Download the zip for your platform: **Mouser-Windows.zip**, **Mouser-macOS.zip** (Apple Silicon), **Mouser-macOS-intel.zip** (Intel macOS), or **Mouser-Linux.zip**
 3. **Extract** the zip to any folder (Desktop, Documents, wherever you like)
 4. **Run** the executable: `Mouser.exe` (Windows), `Mouser.app` (macOS), or `./Mouser` (Linux)
 
@@ -376,7 +380,7 @@ mouser/
 │   ├── accessibility.py     # macOS Accessibility trust checks
 │   ├── engine.py            # Core engine — wires hook ↔ simulator ↔ config
 │   ├── mouse_hook.py        # Low-level mouse hook + HID++ gesture listener
-│   ├── hid_gesture.py       # HID++ 2.0 gesture button divert (Bluetooth)
+│   ├── hid_gesture.py       # HID++ 2.0 gesture button divert (Bluetooth + Logi Bolt)
 │   ├── logi_devices.py      # Known Logitech device catalog + connected-device metadata
 │   ├── device_layouts.py    # Device-family layout registry for QML overlays
 │   ├── key_simulator.py     # Platform-specific action simulator
@@ -430,7 +434,7 @@ The app has two pages accessible from a slim sidebar:
 
 - **Early multi-device support** — only the MX Master family currently has a dedicated interactive overlay; MX Anywhere, MX Vertical, and unknown Logitech mice still use the generic fallback card
 - **Per-device mappings are not fully separated yet** — layout overrides are stored per detected device, but profile mappings are still global rather than truly device-specific
-- **Bluetooth recommended** — HID++ gesture button divert works best over Bluetooth; USB receiver has partial support
+- **Bluetooth and Logi Bolt supported** — HID++ gesture button divert works over both Bluetooth and Logi Bolt USB receivers
 - **Conflicts with Logitech Options+** — both apps fight over HID++ access; quit Options+ before running Mouser
 - **Scroll inversion is experimental** — uses coalesced `PostMessage` injection to avoid LL hook deadlocks; may not work perfectly in all apps
 - **Admin not required** — but some games or elevated windows may not receive injected keystrokes
