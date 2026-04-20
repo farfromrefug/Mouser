@@ -45,6 +45,9 @@ from core.updater import (
     STATUS_ERROR,
 )
 
+# Delay (ms) before the startup auto-update check so the UI is fully ready.
+_AUTO_UPDATE_CHECK_DELAY_MS = 5000
+
 
 def _action_label(action_id):
     if action_id.startswith("custom:"):
@@ -180,7 +183,7 @@ class Backend(QObject):
         self._sync_connected_device_info()
         # Schedule auto-update check on startup (delayed so the UI is ready first)
         if self._cfg.get("settings", {}).get("auto_update", True):
-            QTimer.singleShot(5000, self._updater.check)
+            QTimer.singleShot(_AUTO_UPDATE_CHECK_DELAY_MS, self._updater.check)
 
     # ── Properties ─────────────────────────────────────────────
 

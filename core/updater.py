@@ -55,7 +55,7 @@ _REQUEST_TIMEOUT = 20  # seconds
 def _version_tuple(version_str: str) -> tuple:
     """Convert a semver string to a comparable tuple of ints."""
     try:
-        return tuple(int(p) for p in version_str.lstrip("v").split(".") if p.isdigit())
+        return tuple(int(p) for p in version_str.lstrip("v").split(".") if p.strip().isdigit())
     except (ValueError, AttributeError):
         return (0,)
 
@@ -329,11 +329,14 @@ class Updater:
         """Extract .app from zip and replace the running bundle in-place."""
         import zipfile
 
+        # Maximum directory levels to walk up when searching for the .app bundle.
+        _MAX_APP_SEARCH_DEPTH = 8
+
         exe = Path(sys.executable)
         # Walk up the path to locate the .app bundle directory
         bundle: Optional[Path] = None
         candidate = exe
-        for _ in range(8):
+        for _ in range(_MAX_APP_SEARCH_DEPTH):
             if candidate.suffix == ".app":
                 bundle = candidate
                 break
@@ -422,6 +425,7 @@ class Updater:
             bat_content = (
                 "@echo off\r\n"
                 "timeout /t 2 /nobreak >nul\r\n"
+                # /E copies subdirectories; /IS, /IT, /IM overwrite even identical/tweaked files
                 f'robocopy "{new_dir}" "{install_dir}" /E /IS /IT /IM /NFL /NDL /NJH /NJS\r\n'
                 f'start "" "{install_dir / exe_path.name}"\r\n'
                 'del "%~f0"\r\n'
