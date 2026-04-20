@@ -190,12 +190,8 @@ class Backend(QObject):
             self._cfg.setdefault("settings", {})["start_at_login"] = False
         self._sync_connected_device_info()
         # Schedule auto-update check on startup (delayed so the UI is fully ready).
-        # Only fire if auto_update is enabled AND the last check was >24 h ago.
         if self._cfg.get("settings", {}).get("auto_update", True):
-            last_check = self._cfg.get("settings", {}).get("last_update_check", 0)
-            elapsed = time.time() - last_check
-            if elapsed >= _AUTO_UPDATE_CHECK_INTERVAL_S:
-                QTimer.singleShot(_AUTO_UPDATE_CHECK_DELAY_MS, self._updater.check)
+            QTimer.singleShot(_AUTO_UPDATE_CHECK_DELAY_MS, self._updater.check)
             self._update_check_timer.start()
 
     # ── Properties ─────────────────────────────────────────────
@@ -820,7 +816,6 @@ class Backend(QObject):
             STATUS_DOWNLOADING, STATUS_INSTALLING,
             STATUS_INSTALLED, STATUS_NEEDS_MANUAL,
         ):
-            self._cfg.setdefault("settings", {})["last_update_check"] = time.time()
             save_config(self._cfg)
         self.updateStatusChanged.emit()
 
