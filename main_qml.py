@@ -539,6 +539,17 @@ def main():
 
     tray_menu.addSeparator()
 
+    check_update_action = QAction(locale_mgr.tr("tray.check_for_update"), tray_menu)
+
+    def _tray_check_for_update():
+        show_main_window()
+        backend.checkForUpdate()
+
+    check_update_action.triggered.connect(_tray_check_for_update)
+    tray_menu.addAction(check_update_action)
+
+    tray_menu.addSeparator()
+
     quit_action = QAction(locale_mgr.tr("tray.quit"), tray_menu)
 
     def quit_app():
@@ -552,6 +563,7 @@ def main():
     def _update_tray_texts():
         """Refresh tray menu labels after a language change."""
         open_action.setText(locale_mgr.tr("tray.open_settings"))
+        check_update_action.setText(locale_mgr.tr("tray.check_for_update"))
         quit_action.setText(locale_mgr.tr("tray.quit"))
         sync_debug_action()
         # Re-sync toggle text based on current engine state

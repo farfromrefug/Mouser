@@ -93,7 +93,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libhidapi-dev
+        run: sudo apt-get update && sudo apt-get install -y libhidapi-dev dpkg-dev imagemagick
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -101,20 +101,54 @@ jobs:
       - name: Build with PyInstaller
         run: pyinstaller Mouser-linux.spec --noconfirm
 
-      - name: Create archive
+      - name: Create zip archive
         run: cd dist && zip -r -y ../Mouser-Linux.zip Mouser
+
+      - name: Build .deb package
+        run: |
+          chmod +x build_deb.sh
+          ./build_deb.sh
 
       - uses: actions/upload-artifact@v7
         with:
           name: Mouser-Linux
           path: Mouser-Linux.zip
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Mouser-Linux-deb
+          path: dist/Mouser-Linux.deb
+
   release:
     if: startsWith(github.ref, 'refs/tags/')
     needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
+
       - uses: actions/download-artifact@v8
+
+      - name: Generate latest.json
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          REPO="${{ github.repository }}"
+          BASE_URL="https://github.com/${REPO}/releases/download/${{ github.ref_name }}"
+          cat > latest.json << EOF
+          {
+            "version": "${VERSION}",
+            "date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "downloads": {
+              "windows-x64":  "${BASE_URL}/Mouser-Windows.zip",
+              "macos-arm64":  "${BASE_URL}/Mouser-macOS.zip",
+              "macos-x86_64": "${BASE_URL}/Mouser-macOS-intel.zip",
+              "linux-deb":    "${BASE_URL}/Mouser-Linux.deb",
+              "linux-zip":    "${BASE_URL}/Mouser-Linux.zip"
+            }
+          }
+          EOF
+          echo "==> Generated latest.json:"
+          cat latest.json
 
       - name: Create or update GitHub Release
         env:
@@ -128,7 +162,9 @@ jobs:
               Mouser-Windows/Mouser-Windows.zip \
               Mouser-macOS/Mouser-macOS.zip \
               Mouser-macOS-intel/Mouser-macOS-intel.zip \
-              Mouser-Linux/Mouser-Linux.zip
+              Mouser-Linux/Mouser-Linux.zip \
+              Mouser-Linux-deb/Mouser-Linux.deb \
+              latest.json
           else
             gh release create "${{ github.ref_name }}" \
               --repo "${{ github.repository }}" \
@@ -137,5 +173,7 @@ jobs:
               Mouser-Windows/Mouser-Windows.zip \
               Mouser-macOS/Mouser-macOS.zip \
               Mouser-macOS-intel/Mouser-macOS-intel.zip \
-              Mouser-Linux/Mouser-Linux.zip
+              Mouser-Linux/Mouser-Linux.zip \
+              Mouser-Linux-deb/Mouser-Linux.deb \
+              latest.json
           fi

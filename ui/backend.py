@@ -31,6 +31,19 @@ from core.startup import (
     supports_login_startup,
     sync_from_config as sync_login_startup_from_config,
 )
+from core.updater import (
+    Updater,
+    STATUS_IDLE,
+    STATUS_CHECKING,
+    STATUS_UP_TO_DATE,
+    STATUS_AVAILABLE,
+    STATUS_DOWNLOADING,
+    STATUS_INSTALLING,
+    STATUS_INSTALLED,
+    STATUS_NEEDS_MANUAL,
+    STATUS_CANCELLED,
+    STATUS_ERROR,
+)
 
 
 def _action_label(action_id):
@@ -60,6 +73,7 @@ class Backend(QObject):
     deviceInfoChanged = Signal()
     deviceLayoutChanged = Signal()
     knownAppsChanged = Signal()
+    updateStatusChanged = Signal()
 
     # Internal cross-thread signals
     _profileSwitchRequest = Signal(str)
@@ -70,6 +84,8 @@ class Backend(QObject):
     _gestureEventRequest = Signal(object)
     _smartShiftReadRequest = Signal()
     _statusMessageRequest = Signal(str)
+    _updateProgressRequest = Signal(str, float)
+    _updateFinishedRequest = Signal(str, str)
 
     def __init__(self, engine=None, parent=None):
         super().__init__(parent)
@@ -104,6 +120,16 @@ class Backend(QObject):
         self._connected_device_refresh_pending = False
         self._connected_device_refresh_attempts = 0
 
+        # ── Updater state ───────────────────────────────────────
+        self._update_status = STATUS_IDLE
+        self._update_latest_version = ""
+        self._update_download_progress = 0.0
+        self._update_detail = ""
+        self._updater = Updater(
+            on_progress=self._onUpdaterProgress,
+            on_finished=self._onUpdaterFinished,
+        )
+
         # Cross-thread signal connections
         self._profileSwitchRequest.connect(
             self._handleProfileSwitch, Qt.QueuedConnection)
@@ -121,6 +147,10 @@ class Backend(QObject):
             self._handleSmartShiftRead, Qt.QueuedConnection)
         self._statusMessageRequest.connect(
             self._handleStatusMessage, Qt.QueuedConnection)
+        self._updateProgressRequest.connect(
+            self._handleUpdateProgress, Qt.QueuedConnection)
+        self._updateFinishedRequest.connect(
+            self._handleUpdateFinished, Qt.QueuedConnection)
 
         # Wire engine callbacks
         if engine:
@@ -148,6 +178,9 @@ class Backend(QObject):
         else:
             self._cfg.setdefault("settings", {})["start_at_login"] = False
         self._sync_connected_device_info()
+        # Schedule auto-update check on startup (delayed so the UI is ready first)
+        if self._cfg.get("settings", {}).get("auto_update", True):
+            QTimer.singleShot(5000, self._updater.check)
 
     # ── Properties ─────────────────────────────────────────────
 
@@ -322,6 +355,28 @@ class Backend(QObject):
     @Property(bool, notify=debugEventsEnabledChanged)
     def debugEventsEnabled(self):
         return self._debug_events_enabled
+
+    # ── Update properties ───────────────────────────────────────
+
+    @Property(bool, notify=settingsChanged)
+    def autoUpdate(self):
+        return bool(self._cfg.get("settings", {}).get("auto_update", True))
+
+    @Property(str, notify=updateStatusChanged)
+    def updateStatus(self):
+        return self._update_status
+
+    @Property(str, notify=updateStatusChanged)
+    def updateLatestVersion(self):
+        return self._update_latest_version
+
+    @Property(float, notify=updateStatusChanged)
+    def updateDownloadProgress(self):
+        return self._update_download_progress
+
+    @Property(str, notify=updateStatusChanged)
+    def updateDetail(self):
+        return self._update_detail
 
     @Property(bool, constant=True)
     def supportsGestureDirections(self):
@@ -663,6 +718,55 @@ class Backend(QObject):
             self._append_debug_line("Debug mode disabled")
         self.settingsChanged.emit()
         self.debugEventsEnabledChanged.emit()
+
+    # ── Update slots ────────────────────────────────────────────
+
+    @Slot(bool)
+    def setAutoUpdate(self, value):
+        enabled = bool(value)
+        self._cfg.setdefault("settings", {})["auto_update"] = enabled
+        save_config(self._cfg)
+        self.settingsChanged.emit()
+
+    @Slot()
+    def checkForUpdate(self):
+        """Trigger a background update check."""
+        if not self._updater.is_busy():
+            self._update_status = STATUS_CHECKING
+            self._update_download_progress = 0.0
+            self.updateStatusChanged.emit()
+            self._updater.check()
+
+    @Slot()
+    def downloadAndInstallUpdate(self):
+        """Download and install the latest update."""
+        if not self._updater.is_busy():
+            self._update_status = STATUS_DOWNLOADING
+            self._update_download_progress = 0.0
+            self.updateStatusChanged.emit()
+            self._updater.download_and_install()
+
+    # Updater background callbacks → marshal to Qt main thread
+
+    def _onUpdaterProgress(self, status: str, fraction: float):
+        self._updateProgressRequest.emit(status, fraction)
+
+    def _onUpdaterFinished(self, status: str, detail):
+        self._updateFinishedRequest.emit(status, detail or "")
+
+    @Slot(str, float)
+    def _handleUpdateProgress(self, status: str, fraction: float):
+        self._update_status = status
+        self._update_download_progress = fraction
+        self.updateStatusChanged.emit()
+
+    @Slot(str, str)
+    def _handleUpdateFinished(self, status: str, detail: str):
+        self._update_status = status
+        self._update_detail = detail
+        if status == STATUS_AVAILABLE:
+            self._update_latest_version = detail
+        self.updateStatusChanged.emit()
 
     @Slot(bool)
     def setDebugEventsEnabled(self, value):
