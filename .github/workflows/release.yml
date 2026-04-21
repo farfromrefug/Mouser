@@ -127,6 +127,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install UPX
+        run: choco install upx --no-progress -y
+
       - name: Build with PyInstaller
         run: pyinstaller Mouser.spec --noconfirm
 
@@ -205,7 +208,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libhidapi-dev dpkg-dev imagemagick
+        run: sudo apt-get update && sudo apt-get install -y libhidapi-dev dpkg-dev imagemagick upx-ucl
 
       - name: Install dependencies
         run: pip install -r requirements.txt

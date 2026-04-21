@@ -204,6 +204,15 @@ exe = EXE(
     exclude_binaries=True,
     name="Mouser",
     console=False,
+    upx=True,
+    upx_exclude=[
+        # Qt shared libraries use mmap-based resource loading; compressing
+        # them with UPX can break resource access at runtime.
+        "libQt6*.so*",
+        # ICU and Python shared libs — large and sensitive to UPX rewriting.
+        "libicu*.so*",
+        "libpython*.so*",
+    ],
 )
 
 
@@ -213,6 +222,12 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     name="Mouser",
+    upx=True,
+    upx_exclude=[
+        "libQt6*.so*",
+        "libicu*.so*",
+        "libpython*.so*",
+    ],
 )
 
 

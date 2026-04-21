@@ -285,7 +285,7 @@ class Updater:
     # ── Linux .deb ─────────────────────────────────────────────────────────
 
     def _install_deb(self, deb_path: str) -> None:
-        """Install a .deb file via pkexec + apt/dpkg, then signal restart."""
+        """Install a .deb file via pkexec + apt/dpkg, then schedule a restart."""
         candidates: list[list[str]] = []
         if shutil.which("pkexec"):
             if shutil.which("apt"):
@@ -303,6 +303,23 @@ class Updater:
             try:
                 result = subprocess.run(cmd, timeout=180, check=False)
                 if result.returncode == 0:
+                    # New binary is now on disk.  Spawn a small helper script
+                    # that waits for this process to exit and then relaunches
+                    # the (now-updated) executable — the same pattern used by
+                    # _install_linux_zip so that "Restart Now" works correctly.
+                    exe_path = Path(sys.executable)
+                    restart_dir = Path(tempfile.mkdtemp(prefix="mouser_deb_restart_"))
+                    sh_path = restart_dir / "mouser_restart.sh"
+                    sh_content = (
+                        "#!/bin/sh\n"
+                        "sleep 2\n"
+                        f'"{exe_path}" &\n'
+                        f'rm -rf "{restart_dir}"\n'
+                        'rm -f "$0"\n'
+                    )
+                    sh_path.write_text(sh_content)
+                    sh_path.chmod(0o755)
+                    subprocess.Popen([str(sh_path)], close_fds=True)
                     self._emit_finished(STATUS_INSTALLED)
                     return
             except (subprocess.TimeoutExpired, OSError):
