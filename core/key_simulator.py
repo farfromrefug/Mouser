@@ -1498,7 +1498,7 @@ elif sys.platform == "linux":
         "f1": KEY_F1, "f2": KEY_F2, "f3": KEY_F3, "f4": KEY_F4,
         "f5": KEY_F5, "f6": KEY_F6, "f7": KEY_F7, "f8": KEY_F8,
         "f9": KEY_F9, "f10": KEY_F10, "f11": KEY_F11, "f12": KEY_F12,
-        "volumeup": KEY_VOLUME_UP, "volumedown": KEY_VOLUMEDOWN,
+        "volumeup": KEY_VOLUMEUP, "volumedown": KEY_VOLUMEDOWN,
         "mute": KEY_MUTE, "playpause": KEY_PLAYPAUSE,
         "nexttrack": KEY_NEXTSONG, "prevtrack": KEY_PREVIOUSSONG,
     }
