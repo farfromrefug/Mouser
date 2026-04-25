@@ -107,6 +107,7 @@ DEFAULT_CONFIG = {
         "debug_mode": False,
         "device_layout_overrides": {},
         "language": "en",
+        "auto_update": True,
     },
 }
 
